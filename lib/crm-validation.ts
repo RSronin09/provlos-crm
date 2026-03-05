@@ -3,6 +3,7 @@ import {
   ActivityType,
   EnrichmentStatus,
   JobType,
+  LeadCandidateStatus,
   TaskStatus,
   TaskType,
   Prisma,
@@ -83,3 +84,24 @@ export const enqueueSchema = z
     message: "Provide accountId or filters",
     path: ["accountId"],
   });
+
+export const discoveryEnqueueSchema = z.object({
+  query: z.string().min(2),
+  region: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+});
+
+export const discoveryCandidateFilterSchema = z.object({
+  status: z.nativeEnum(LeadCandidateStatus).optional(),
+  search: z.string().optional(),
+  state: z.string().optional(),
+  region: z.string().optional(),
+});
+
+export const decisionMakerSearchSchema = z.object({
+  companyName: z.string().min(2),
+  website: z.string().url().optional().nullable(),
+  state: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  refresh: z.boolean().optional(),
+});

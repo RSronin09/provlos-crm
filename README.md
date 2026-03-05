@@ -40,6 +40,8 @@ npm run dev
 
 - `DATABASE_URL`: required, Postgres connection string (Neon in local/dev/prod).
 - `ADMIN_TOKEN`: required for write operations on API routes. Send via `x-admin-token` header.
+- `SERPER_API_KEY`: optional but recommended for live web search in decision-maker lookup.
+- `HUNTER_API_KEY`: optional but recommended for domain email discovery in decision-maker lookup.
 
 Read endpoints are currently open. Write endpoints enforce `x-admin-token`.
 
@@ -68,7 +70,7 @@ npm run prisma:deploy
 
 ## CRM Routes
 
-- UI: `/crm`, `/crm/accounts`, `/crm/accounts/[id]`, `/crm/tasks`, `/crm/import`, `/crm/settings`
+- UI: `/crm`, `/crm/accounts`, `/crm/accounts/[id]`, `/crm/discovery`, `/crm/tasks`, `/crm/import`, `/crm/settings`
 - API:
   - `GET /api/accounts`
   - `POST /api/accounts` (admin)
@@ -84,4 +86,21 @@ npm run prisma:deploy
   - `PATCH /api/tasks/[id]` (admin)
   - `POST /api/enrichment/enqueue` (admin)
   - `POST /api/enrichment/process-next` (admin)
+  - `POST /api/discovery/enqueue` (admin)
+  - `POST /api/discovery/process-next` (admin, processes one queued discovery job)
+  - `GET /api/discovery/candidates`
+  - `PATCH /api/discovery/candidates/[id]` (admin)
+  - `POST /api/discovery/candidates/[id]/promote` (admin)
+  - `POST /api/decision-makers/search` (admin; company lookup -> decision makers)
   - `GET /api/health`
+
+## Decision Maker Search
+
+Use `/crm/discovery` to search by company name and return likely decision makers with name, phone, email, and title.
+
+- The endpoint uses live provider lookups (`SERPER_API_KEY`, `HUNTER_API_KEY`) with strict request timeouts.
+- Existing contacts are returned immediately unless "force refresh" is enabled in UI.
+- Results are persisted to `Contact` and deduplicated by email/name.
+- If both provider keys are missing, the endpoint returns a configuration error.
+
+The legacy discovery candidate routes remain available if you still want a separate net-new lead queue.

@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 const navItems = [
   { href: "/crm", label: "Dashboard" },
   { href: "/crm/accounts", label: "Accounts" },
+  { href: "/crm/discovery", label: "Decision Makers" },
   { href: "/crm/tasks", label: "Tasks" },
   { href: "/crm/import", label: "Import Targets" },
   { href: "/crm/settings", label: "Settings" },

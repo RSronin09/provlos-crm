@@ -79,6 +79,20 @@ enum OutreachTouchStatus {
   FAILED
 }
 
+enum LeadDiscoveryJobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum LeadCandidateStatus {
+  NEW
+  REVIEWED
+  PROMOTED
+  REJECTED
+}
+
 model Account {
   id               String           @id @default(uuid()) @db.Uuid
   companyName      String
@@ -106,6 +120,7 @@ model Account {
   tasks            Task[]
   enrichmentJobs   EnrichmentJob[]
   outreachTouches  OutreachTouch[]
+  leadCandidates   LeadCandidate[]
 
   @@index([companyName])
   @@index([stage])
@@ -230,4 +245,55 @@ model OutreachTouch {
   @@index([accountId])
   @@index([status])
   @@index([scheduledAt])
+}
+
+model LeadDiscoveryJob {
+  id           String                 @id @default(uuid()) @db.Uuid
+  query        String
+  region       String?
+  state        String?
+  status       LeadDiscoveryJobStatus @default(QUEUED)
+  attemptCount Int                    @default(0)
+  resultCount  Int                    @default(0)
+  lastError    String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  candidates   LeadCandidate[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model LeadCandidate {
+  id                String              @id @default(uuid()) @db.Uuid
+  discoveryJobId    String              @db.Uuid
+  accountId         String?             @db.Uuid
+  companyName       String
+  website           String?
+  state             String?
+  region            String?
+  signalType        String?
+  signalSummary     String?
+  sourceUrl         String?
+  sourcePublishedAt DateTime?
+  confidenceScore   Float?
+  dedupeKey         String?
+  status            LeadCandidateStatus @default(NEW)
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  discoveryJob      LeadDiscoveryJob    @relation(fields: [discoveryJobId], references: [id], onDelete: Cascade)
+  account           Account?            @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([companyName])
+  @@index([state])
+  @@index([region])
+  @@index([accountId])
+  @@index([discoveryJobId])
+  @@index([dedupeKey])
 }
