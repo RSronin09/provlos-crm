@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProvLOS CRM (Next.js + Prisma + Neon)
 
-## Getting Started
+Core CRM architecture v1 for account funneling, contact tracking, activities, tasks, and enrichment job queueing.
 
-First, run the development server:
+## Local Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment template:
+
+```bash
+cp .env.example .env
+```
+
+3. Set `DATABASE_URL` to your Neon Postgres connection string and set a strong `ADMIN_TOKEN`.
+
+4. Generate Prisma Client:
+
+```bash
+npm run prisma:generate
+```
+
+5. Run migrations:
+
+```bash
+npm run prisma:migrate -- --name crm_v1
+```
+
+6. Start dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Env Vars
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `DATABASE_URL`: required, Postgres connection string (Neon in local/dev/prod).
+- `ADMIN_TOKEN`: required for write operations on API routes. Send via `x-admin-token` header.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Read endpoints are currently open. Write endpoints enforce `x-admin-token`.
 
-## Learn More
+## DB Migrate
 
-To learn more about Next.js, take a look at the following resources:
+Use Prisma migrations only (no ad-hoc SQL).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Local development migration:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run prisma:migrate -- --name <migration_name>
+```
 
-## Deploy on Vercel
+- Deploy migrations in Vercel/CI:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run prisma:deploy
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploy Notes
+
+- This app is Vercel-friendly: enrichment processing is request/job-based (`process-next` handles one queued job per request).
+- Set `DATABASE_URL` and `ADMIN_TOKEN` in Vercel Project Settings.
+- The Prisma datasource is configured to use only `env("DATABASE_URL")`; no localhost override should be used.
+- Health check endpoint: `GET /api/health`.
+
+## CRM Routes
+
+- UI: `/crm`, `/crm/accounts`, `/crm/accounts/[id]`, `/crm/tasks`, `/crm/import`, `/crm/settings`
+- API:
+  - `GET /api/accounts`
+  - `POST /api/accounts` (admin)
+  - `GET /api/accounts/[id]`
+  - `PATCH /api/accounts/[id]` (admin)
+  - `GET /api/accounts/[id]/contacts`
+  - `POST /api/accounts/[id]/contacts` (admin)
+  - `PATCH /api/contacts/[id]` (admin)
+  - `GET /api/accounts/[id]/activities`
+  - `POST /api/accounts/[id]/activities` (admin)
+  - `GET /api/tasks`
+  - `POST /api/accounts/[id]/tasks` (admin)
+  - `PATCH /api/tasks/[id]` (admin)
+  - `POST /api/enrichment/enqueue` (admin)
+  - `POST /api/enrichment/process-next` (admin)
+  - `GET /api/health`

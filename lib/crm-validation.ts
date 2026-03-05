@@ -1,0 +1,85 @@
+import {
+  AccountStage,
+  ActivityType,
+  EnrichmentStatus,
+  JobType,
+  TaskStatus,
+  TaskType,
+  Prisma,
+} from "@prisma/client";
+import { z } from "zod";
+
+export const accountCreateSchema = z.object({
+  companyName: z.string().min(1),
+  industry: z.string().optional().nullable(),
+  orgType: z.string().optional().nullable(),
+  whatTheyMove: z.string().optional().nullable(),
+  whyHireCouriers: z.string().optional().nullable(),
+  website: z.string().url().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  address1: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  zip: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  stage: z.nativeEnum(AccountStage).optional(),
+  enrichmentStatus: z.nativeEnum(EnrichmentStatus).optional(),
+  priorityScore: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  sourceRowJson: z.custom<Prisma.InputJsonValue>().optional().nullable(),
+});
+
+export const accountUpdateSchema = accountCreateSchema.partial();
+
+export const contactCreateSchema = z.object({
+  firstName: z.string().optional().nullable(),
+  lastName: z.string().optional().nullable(),
+  fullName: z.string().optional().nullable(),
+  title: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  linkedinUrl: z.string().url().optional().nullable(),
+  confidenceScore: z.number().optional().nullable(),
+  source: z.string().optional().nullable(),
+  lastVerifiedAt: z.coerce.date().optional().nullable(),
+  isDoNotContact: z.boolean().optional(),
+});
+
+export const contactUpdateSchema = contactCreateSchema.partial();
+
+export const activityCreateSchema = z.object({
+  contactId: z.string().uuid().optional().nullable(),
+  type: z.nativeEnum(ActivityType),
+  outcome: z.string().optional().nullable(),
+  content: z.string().optional().nullable(),
+  occurredAt: z.coerce.date().optional(),
+});
+
+export const taskCreateSchema = z.object({
+  contactId: z.string().uuid().optional().nullable(),
+  type: z.nativeEnum(TaskType),
+  status: z.nativeEnum(TaskStatus).optional(),
+  dueAt: z.coerce.date().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+export const taskUpdateSchema = taskCreateSchema.partial();
+
+export const enqueueSchema = z
+  .object({
+    accountId: z.string().uuid().optional(),
+    jobType: z.nativeEnum(JobType).default(JobType.COMPANY_INTEL),
+    filters: z
+      .object({
+        stage: z.nativeEnum(AccountStage).optional(),
+        state: z.string().optional(),
+        enrichmentStatus: z.nativeEnum(EnrichmentStatus).optional(),
+        region: z.string().optional(),
+      })
+      .optional(),
+  })
+  .refine((payload) => payload.accountId || payload.filters, {
+    message: "Provide accountId or filters",
+    path: ["accountId"],
+  });
