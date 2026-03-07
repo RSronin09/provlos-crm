@@ -197,6 +197,18 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
           </RightRailCard>
           <RightRailCard title="Quick Links">
             <div className="flex flex-col gap-2 text-sm">
+              <Link href="/crm/contacts" className="text-blue-700 hover:underline">
+                All Contacts
+              </Link>
+              <Link href="/crm/tasks?view=open" className="text-blue-700 hover:underline">
+                Open Tasks
+              </Link>
+              <Link href="/crm/pipeline" className="text-blue-700 hover:underline">
+                Pipeline Board
+              </Link>
+              <Link href="/crm/enrichment" className="text-blue-700 hover:underline">
+                Enrichment Queue
+              </Link>
               {account.website ? (
                 <a href={account.website} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
                   Website

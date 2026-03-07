@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ContactRecordActions } from "@/components/crm/contact-record-actions";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { TaskListCard } from "@/components/crm/ui/task-list-card";
@@ -32,10 +33,8 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
         title={fullName}
         subtitle={`${contact.title ?? "No title"} - ${contact.account.companyName}`}
         actions={
-          <div className="flex gap-2">
-            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Log Call</button>
-            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Log Note</button>
-            <button className="rounded-md bg-blue-700 px-3 py-2 text-sm text-white">Create Task</button>
+          <div className="min-w-[320px]">
+            <ContactRecordActions accountId={contact.accountId} contactId={contact.id} />
           </div>
         }
       />
@@ -83,12 +82,21 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
               {contact.account.companyName}
             </Link>
           </RightRailCard>
-          <RightRailCard title="Quick Actions">
+          <RightRailCard title="Related Tabs">
             <div className="flex flex-col gap-2 text-sm">
-              <button className="rounded-md border border-slate-300 px-3 py-2 text-left">Log Call</button>
-              <button className="rounded-md border border-slate-300 px-3 py-2 text-left">Log Note</button>
-              <button className="rounded-md border border-slate-300 px-3 py-2 text-left">Create Follow-up</button>
+              <Link href="/crm/contacts" className="text-blue-700 hover:underline">
+                All Contacts
+              </Link>
+              <Link href={`/crm/accounts/${contact.accountId}`} className="text-blue-700 hover:underline">
+                Account Record
+              </Link>
+              <Link href="/crm/tasks?view=open" className="text-blue-700 hover:underline">
+                Open Tasks
+              </Link>
             </div>
+          </RightRailCard>
+          <RightRailCard title="Quick Actions">
+            <ContactRecordActions accountId={contact.accountId} contactId={contact.id} compact />
           </RightRailCard>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { MetricCard } from "@/components/crm/ui/metric-card";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { db } from "@/lib/db";
+import Link from "next/link";
 
 export default async function DashboardPage() {
   const [
@@ -53,11 +54,52 @@ export default async function DashboardPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <MetricCard label="Total Accounts" value={totalAccounts} />
-        <MetricCard label="Contacts Found" value={contactsFound} />
-        <MetricCard label="Open Tasks" value={openTasks} />
-        <MetricCard label="Enrichment Jobs Queued" value={queuedJobs} />
-        <MetricCard label="Accounts by Stage" value={accountsByStage.length} hint="Distinct populated stages" />
+        <MetricCard
+          label="Total Accounts"
+          value={totalAccounts}
+          footer={
+            <Link href="/crm/accounts" className="text-xs text-blue-700 hover:underline">
+              Open accounts
+            </Link>
+          }
+        />
+        <MetricCard
+          label="Contacts Found"
+          value={contactsFound}
+          footer={
+            <Link href="/crm/contacts" className="text-xs text-blue-700 hover:underline">
+              Open contacts
+            </Link>
+          }
+        />
+        <MetricCard
+          label="Open Tasks"
+          value={openTasks}
+          footer={
+            <Link href="/crm/tasks?view=open" className="text-xs text-blue-700 hover:underline">
+              Open tasks view
+            </Link>
+          }
+        />
+        <MetricCard
+          label="Enrichment Jobs Queued"
+          value={queuedJobs}
+          footer={
+            <Link href="/crm/enrichment" className="text-xs text-blue-700 hover:underline">
+              Open queue
+            </Link>
+          }
+        />
+        <MetricCard
+          label="Accounts by Stage"
+          value={accountsByStage.length}
+          hint="Distinct populated stages"
+          footer={
+            <Link href="/crm/pipeline" className="text-xs text-blue-700 hover:underline">
+              Open pipeline
+            </Link>
+          }
+        />
       </div>
 
       <DashboardCards
