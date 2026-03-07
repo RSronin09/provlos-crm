@@ -1,4 +1,5 @@
 import { AccountDetailActions } from "@/components/crm/account-detail-actions";
+import { AccountRecordHeaderActions } from "@/components/crm/account-record-header-actions";
 import { ActivityFeed } from "@/components/crm/ui/activity-feed";
 import { ContactListCard } from "@/components/crm/ui/contact-list-card";
 import { DetailTabs } from "@/components/crm/ui/detail-tabs";
@@ -80,13 +81,7 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
           </>
         }
         actions={
-          <>
-            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Edit Account</button>
-            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Add Contact</button>
-            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Log Activity</button>
-            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Create Task</button>
-            <button className="rounded-md bg-blue-700 px-3 py-2 text-sm text-white">Enqueue Enrichment</button>
-          </>
+          <AccountRecordHeaderActions accountId={account.id} initialNotes={account.notes ?? ""} />
         }
       />
 
