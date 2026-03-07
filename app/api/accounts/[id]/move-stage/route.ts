@@ -8,6 +8,7 @@ import { z } from "zod";
 const moveStageSchema = z.object({
   toStage: z.nativeEnum(AccountStage),
   note: z.string().min(1, "Note is required for stage changes"),
+  noteFrom: z.string().min(1, "Name is required for stage changes"),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -33,10 +34,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     return Response.json({ error: "Account not found" }, { status: 404 });
   }
 
-  const { toStage, note } = parsed.data;
+  const { toStage, note, noteFrom } = parsed.data;
   if (account.stage === toStage) {
     return Response.json({ error: "Account is already in this stage" }, { status: 400 });
   }
+
+  const movedAt = new Date();
 
   const [updatedAccount] = await db.$transaction([
     db.account.update({
@@ -47,7 +50,11 @@ export async function POST(request: NextRequest, { params }: Params) {
       data: {
         accountId: id,
         type: ActivityType.NOTE,
-        content: `Pipeline stage moved from ${account.stage} to ${toStage}. Note: ${note.trim()}`,
+        content:
+          `Pipeline stage moved from ${account.stage} to ${toStage}.\n` +
+          `Date: ${movedAt.toISOString().slice(0, 10)}\n` +
+          `Note from: ${noteFrom.trim()}\n` +
+          `Note: ${note.trim()}`,
       },
     }),
   ]);

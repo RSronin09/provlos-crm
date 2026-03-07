@@ -50,6 +50,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [moveNote, setMoveNote] = useState("");
+  const [noteFrom, setNoteFrom] = useState("");
   const [adminToken, setAdminToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +69,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
     if (!account || account.stage === toStage) return;
     setPendingMove({ accountId: draggedId, toStage });
     setMoveNote("");
+    setNoteFrom("");
     setStatus(null);
   }
 
@@ -75,6 +77,10 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
     if (!pendingMove) return;
     if (!moveNote.trim()) {
       setStatus("A note is required before moving this account.");
+      return;
+    }
+    if (!noteFrom.trim()) {
+      setStatus("Name is required in 'Note from' before moving this account.");
       return;
     }
 
@@ -89,6 +95,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
         body: JSON.stringify({
           toStage: pendingMove.toStage,
           note: moveNote.trim(),
+          noteFrom: noteFrom.trim(),
         }),
       });
 
@@ -107,6 +114,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
       setStatus(`Moved account to ${pendingMove.toStage}.`);
       setPendingMove(null);
       setMoveNote("");
+      setNoteFrom("");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unknown error");
     } finally {
@@ -180,6 +188,12 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
             <p className="mt-1 text-sm text-slate-600">
               A note is required when moving an account to {pendingMove.toStage}.
             </p>
+            <input
+              value={noteFrom}
+              onChange={(event) => setNoteFrom(event.target.value)}
+              className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Note from (your name)"
+            />
             <textarea
               value={moveNote}
               onChange={(event) => setMoveNote(event.target.value)}
