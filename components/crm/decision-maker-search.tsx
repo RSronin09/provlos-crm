@@ -14,7 +14,7 @@ type Contact = {
 };
 
 type SearchResult = {
-  account: { id: string; companyName: string; website: string | null };
+  account: { id: string; companyName: string; website: string | null } | null;
   contacts: Contact[];
   source: string;
   note?: string;
@@ -29,6 +29,7 @@ export function DecisionMakerSearch() {
   const [refresh, setRefresh] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -49,6 +50,7 @@ export function DecisionMakerSearch() {
           state: state || null,
           region: region || null,
           refresh,
+          persistToCrm: false,
         }),
       });
 
@@ -64,6 +66,54 @@ export function DecisionMakerSearch() {
       setResult(null);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function addToCrm() {
+    if (!result) return;
+
+    try {
+      setSaving(true);
+      const response = await fetch("/api/discovery/add-to-crm", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": adminToken,
+        },
+        body: JSON.stringify({
+          companyName,
+          website: website || null,
+          state: state || null,
+          region: region || null,
+          contacts: result.contacts.map((contact) => ({
+            fullName:
+              contact.fullName ||
+              `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
+              "Unknown",
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            title: contact.title,
+            email: contact.email,
+            phone: contact.phone,
+            confidenceScore: contact.confidenceScore,
+            source: result.source,
+          })),
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error ?? "Failed to add to CRM");
+      setStatus(
+        `Added ${payload.data.account.companyName} to CRM with ${payload.data.contacts.length} contacts.`,
+      );
+      setResult({
+        ...result,
+        account: payload.data.account,
+      });
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -136,13 +186,23 @@ export function DecisionMakerSearch() {
           Force refresh from internet providers (ignore cached contacts)
         </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-        >
-          {loading ? "Searching..." : "Search Decision Makers"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {loading ? "Searching..." : "Search Decision Makers"}
+          </button>
+          <button
+            type="button"
+            onClick={addToCrm}
+            disabled={saving || !result}
+            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {saving ? "Adding..." : "Add to CRM"}
+          </button>
+        </div>
       </form>
 
       {status ? <p className="text-sm text-slate-700">{status}</p> : null}
@@ -150,8 +210,16 @@ export function DecisionMakerSearch() {
       {result ? (
         <section className="space-y-3 rounded-lg border border-slate-200 p-4">
           <h3 className="text-lg font-semibold">
-            {result.account.companyName} ({result.source})
+            {result.account?.companyName ?? companyName} ({result.source})
           </h3>
+          {result.account ? (
+            <a
+              href={`/crm/accounts/${result.account.id}`}
+              className="inline-block text-sm text-blue-700 hover:underline"
+            >
+              Open account record
+            </a>
+          ) : null}
           {result.note ? <p className="text-sm text-slate-600">{result.note}</p> : null}
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">

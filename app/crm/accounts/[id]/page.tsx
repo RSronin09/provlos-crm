@@ -1,4 +1,13 @@
 import { AccountDetailActions } from "@/components/crm/account-detail-actions";
+import { ActivityFeed } from "@/components/crm/ui/activity-feed";
+import { ContactListCard } from "@/components/crm/ui/contact-list-card";
+import { DetailTabs } from "@/components/crm/ui/detail-tabs";
+import { PageHeader } from "@/components/crm/ui/page-header";
+import { RecordHeader } from "@/components/crm/ui/record-header";
+import { RightRailCard } from "@/components/crm/ui/right-rail-card";
+import { StageBadge } from "@/components/crm/ui/stage-badge";
+import { StatusBadge } from "@/components/crm/ui/status-badge";
+import { TaskListCard } from "@/components/crm/ui/task-list-card";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
@@ -31,6 +40,10 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
           orderBy: [{ status: "asc" }, { dueAt: "asc" }],
           take: 25,
         },
+        enrichmentJobs: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        },
       },
     });
   } catch {
@@ -47,34 +60,49 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link href="/crm/accounts" className="text-sm text-slate-600 hover:underline">
+      <PageHeader
+        title="Account Record"
+        subtitle="CRM profile for company qualification, outreach, and follow-up tracking."
+        actions={
+          <Link href="/crm/accounts" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
             Back to Accounts
           </Link>
-          <h2 className="mt-1 text-2xl font-semibold">{account.companyName}</h2>
-          <p className="text-sm text-slate-600">
-            Stage: {account.stage} | Enrichment: {account.enrichmentStatus}
-          </p>
-        </div>
-      </div>
+        }
+      />
+      <RecordHeader
+        title={account.companyName}
+        subtitle={account.industry ?? "No industry specified"}
+        badges={
+          <>
+            <StageBadge stage={account.stage} />
+            <StatusBadge value={account.enrichmentStatus} />
+            <StatusBadge value={account.priorityScore ? `PRIORITY ${account.priorityScore}` : "PRIORITY N/A"} />
+          </>
+        }
+        actions={
+          <>
+            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Edit Account</button>
+            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Add Contact</button>
+            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Log Activity</button>
+            <button className="rounded-md border border-slate-300 px-3 py-2 text-sm">Create Task</button>
+            <button className="rounded-md bg-blue-700 px-3 py-2 text-sm text-white">Enqueue Enrichment</button>
+          </>
+        }
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
         <div className="space-y-6">
-          <div className="flex gap-2 text-sm">
-            <a href="#contacts" className="rounded-md border border-slate-300 px-3 py-1.5">
-              Contacts
-            </a>
-            <a href="#activities" className="rounded-md border border-slate-300 px-3 py-1.5">
-              Activities
-            </a>
-            <a href="#tasks" className="rounded-md border border-slate-300 px-3 py-1.5">
-              Tasks
-            </a>
-          </div>
+          <DetailTabs
+            tabs={[
+              { id: "contacts", label: "Contacts" },
+              { id: "activities", label: "Activities" },
+              { id: "tasks", label: "Tasks" },
+              { id: "timeline", label: "Timeline" },
+            ]}
+          />
 
-          <section className="rounded-lg border border-slate-200 p-4">
-            <h3 className="mb-3 text-lg font-semibold">Account Summary</h3>
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-lg font-semibold">Overview</h3>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Field label="Industry" value={account.industry} />
               <Field label="Org Type" value={account.orgType} />
@@ -87,54 +115,112 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
             </dl>
           </section>
 
-          <section id="contacts" className="rounded-lg border border-slate-200 p-4">
-            <h3 className="mb-3 text-lg font-semibold">Contacts</h3>
-            <ul className="space-y-2 text-sm">
-              {account.contacts.map((contact) => (
-                <li key={contact.id} className="rounded-md border border-slate-200 px-3 py-2">
-                  <div className="font-medium">
-                    {contact.fullName || `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() || "Unnamed contact"}
-                  </div>
-                  <div className="text-slate-600">
-                    {contact.title ?? "-"} | {contact.email ?? "-"} | DNC:{" "}
-                    {contact.isDoNotContact ? "Yes" : "No"}
-                  </div>
-                </li>
-              ))}
-              {account.contacts.length === 0 ? <li className="text-slate-500">No contacts yet.</li> : null}
-            </ul>
+          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-lg font-semibold">Notes</h3>
+            <p className="text-sm text-slate-600">{account.notes ?? "No notes saved."}</p>
           </section>
 
-          <section id="activities" className="rounded-lg border border-slate-200 p-4">
+          <section id="contacts" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <ContactListCard
+              title="Contacts"
+              contacts={account.contacts.map((contact) => ({
+                id: contact.id,
+                title:
+                  contact.fullName ||
+                  `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
+                  "Unnamed contact",
+                subtitle: contact.title ?? "No title",
+                meta: `${contact.email ?? "No email"} | ${contact.phone ?? "No phone"}`,
+              }))}
+            />
+          </section>
+
+          <section id="activities" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="mb-3 text-lg font-semibold">Activities</h3>
-            <ul className="space-y-2 text-sm">
-              {account.activities.map((activity) => (
-                <li key={activity.id} className="rounded-md border border-slate-200 px-3 py-2">
-                  <div className="font-medium">{activity.type}</div>
-                  <div className="text-slate-600">{activity.content ?? activity.outcome ?? "-"}</div>
-                </li>
-              ))}
-              {account.activities.length === 0 ? <li className="text-slate-500">No activities yet.</li> : null}
-            </ul>
+            <ActivityFeed
+              items={account.activities.map((activity) => ({
+                id: activity.id,
+                title: activity.type,
+                content: activity.content ?? activity.outcome,
+                timestamp: activity.occurredAt.toISOString().slice(0, 16).replace("T", " "),
+              }))}
+            />
           </section>
 
-          <section id="tasks" className="rounded-lg border border-slate-200 p-4">
-            <h3 className="mb-3 text-lg font-semibold">Tasks</h3>
-            <ul className="space-y-2 text-sm">
-              {account.tasks.map((task) => (
-                <li key={task.id} className="rounded-md border border-slate-200 px-3 py-2">
-                  <div className="font-medium">
-                    {task.type} ({task.status})
-                  </div>
-                  <div className="text-slate-600">{task.notes ?? "-"}</div>
-                </li>
-              ))}
-              {account.tasks.length === 0 ? <li className="text-slate-500">No tasks yet.</li> : null}
-            </ul>
+          <section id="tasks" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <TaskListCard
+              title="Tasks"
+              tasks={account.tasks.map((task) => ({
+                id: task.id,
+                title: task.type,
+                subtitle: task.notes ?? undefined,
+                status: task.status,
+              }))}
+            />
+          </section>
+
+          <section id="timeline" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="mb-3 text-lg font-semibold">Timeline</h3>
+            <ActivityFeed
+              items={[
+                ...account.activities.map((activity) => ({
+                  id: `activity-${activity.id}`,
+                  title: `Activity: ${activity.type}`,
+                  content: activity.content ?? activity.outcome,
+                  timestamp: activity.occurredAt.toISOString().slice(0, 16).replace("T", " "),
+                })),
+                ...account.tasks.map((task) => ({
+                  id: `task-${task.id}`,
+                  title: `Task ${task.status}: ${task.type}`,
+                  content: task.notes,
+                  timestamp: task.updatedAt.toISOString().slice(0, 16).replace("T", " "),
+                })),
+              ].sort((a, b) => b.timestamp.localeCompare(a.timestamp))}
+            />
           </section>
         </div>
 
-        <AccountDetailActions accountId={account.id} initialNotes={account.notes ?? ""} />
+        <div className="space-y-4">
+          <RightRailCard title="Account Details">
+            <ul className="space-y-1 text-sm text-slate-700">
+              <li>Phone: {account.phone ?? "-"}</li>
+              <li>Website: {account.website ?? "-"}</li>
+              <li>State: {account.state ?? "-"}</li>
+              <li>Region: {account.region ?? "-"}</li>
+            </ul>
+          </RightRailCard>
+          <RightRailCard title="Contact Summary">
+            <p className="text-sm text-slate-700">{account.contacts.length} contacts in this account.</p>
+          </RightRailCard>
+          <RightRailCard title="Open Tasks">
+            <p className="text-sm text-slate-700">
+              {account.tasks.filter((task) => task.status === "OPEN").length} open tasks.
+            </p>
+          </RightRailCard>
+          <RightRailCard title="Recent Activity">
+            <p className="text-sm text-slate-700">{account.activities.length} logged activities.</p>
+          </RightRailCard>
+          <RightRailCard title="Quick Links">
+            <div className="flex flex-col gap-2 text-sm">
+              {account.website ? (
+                <a href={account.website} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+                  Website
+                </a>
+              ) : (
+                <span className="text-slate-500">Website unavailable</span>
+              )}
+              <a
+                href={`https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(account.companyName)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-700 hover:underline"
+              >
+                LinkedIn Search
+              </a>
+            </div>
+          </RightRailCard>
+          <AccountDetailActions accountId={account.id} initialNotes={account.notes ?? ""} />
+        </div>
       </div>
     </div>
   );

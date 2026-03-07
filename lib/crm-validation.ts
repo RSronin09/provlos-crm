@@ -104,4 +104,25 @@ export const decisionMakerSearchSchema = z.object({
   state: z.string().optional().nullable(),
   region: z.string().optional().nullable(),
   refresh: z.boolean().optional(),
+  persistToCrm: z.boolean().optional(),
+});
+
+export const addDiscoveredLeadSchema = z.object({
+  companyName: z.string().min(2),
+  website: z.string().url().optional().nullable(),
+  state: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  contacts: z.array(
+    z.object({
+      fullName: z.string().min(1),
+      firstName: z.string().optional().nullable(),
+      lastName: z.string().optional().nullable(),
+      title: z.string().optional().nullable(),
+      department: z.string().optional().nullable(),
+      email: z.string().email().optional().nullable(),
+      phone: z.string().optional().nullable(),
+      confidenceScore: z.number().optional().nullable(),
+      source: z.string().optional().nullable(),
+    }),
+  ),
 });

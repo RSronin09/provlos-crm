@@ -4,9 +4,9 @@ export default function DiscoveryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold">Decision Maker Search</h2>
+        <h2 className="text-2xl font-semibold">Lead Discovery</h2>
         <p className="text-sm text-slate-600">
-          Enter a company name, hit search, and return likely decision makers with name, phone, and email.
+          Discover net-new companies and decision makers, then add them directly into CRM as target accounts.
         </p>
       </div>
       <DecisionMakerSearch />

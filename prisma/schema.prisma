@@ -15,11 +15,13 @@ datasource db {
 
 enum AccountStage {
   TARGET
-  QUALIFIED
+  ENRICHING
+  ENRICHED
   CONTACTED
   ENGAGED
-  OPPORTUNITY
-  CUSTOMER
+  QUALIFIED
+  PROPOSAL
+  WON
   LOST
 }
 

@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     return zodErrorResponse(parsed.error);
   }
 
-  const { companyName, website, state, region, refresh } = parsed.data;
+  const { companyName, website, state, region, refresh, persistToCrm } = parsed.data;
 
   if (!process.env.SERPER_API_KEY && !process.env.HUNTER_API_KEY) {
     return Response.json(
@@ -28,15 +28,54 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const account =
-    (await db.account.findFirst({
-      where: {
-        OR: [
-          ...(website ? [{ website }] : []),
-          { companyName: { equals: companyName, mode: "insensitive" } },
-        ],
+  const account = await db.account.findFirst({
+    where: {
+      OR: [
+        ...(website ? [{ website }] : []),
+        { companyName: { equals: companyName, mode: "insensitive" } },
+      ],
+    },
+  });
+
+  if (account && !persistToCrm) {
+    const existingContacts = await db.contact.findMany({
+      where: { accountId: account.id, isDoNotContact: false },
+      orderBy: { confidenceScore: "desc" },
+    });
+    if (existingContacts.length > 0 && !refresh) {
+      return Response.json({
+        data: {
+          account,
+          contacts: existingContacts,
+          source: "existing",
+          note: "Account already exists in CRM. Contacts loaded from existing records.",
+        },
+      });
+    }
+  }
+
+  if (!persistToCrm) {
+    const lookupPreview = await lookupDecisionMakers({
+      companyName,
+      website: website ?? account?.website,
+    });
+    return Response.json({
+      data: {
+        account: account
+          ? { id: account.id, companyName: account.companyName, website: account.website }
+          : null,
+        contacts: lookupPreview.contacts.map((contact, index) => ({
+          id: `preview-${index}`,
+          ...contact,
+        })),
+        source: lookupPreview.providersUsed.join("+") || "unknown",
+        note: "Preview results only. Click Add to CRM to persist account and contacts.",
       },
-    })) ??
+    });
+  }
+
+  const resolvedAccount =
+    account ??
     (await db.account.create({
       data: {
         companyName,
@@ -49,22 +88,22 @@ export async function POST(request: NextRequest) {
     }));
 
   const existingContacts = await db.contact.findMany({
-    where: { accountId: account.id, isDoNotContact: false },
+    where: { accountId: resolvedAccount.id, isDoNotContact: false },
     orderBy: { confidenceScore: "desc" },
   });
 
   if (existingContacts.length > 0 && !refresh) {
-    return Response.json({ data: { account, contacts: existingContacts, source: "existing" } });
+    return Response.json({ data: { account: resolvedAccount, contacts: existingContacts, source: "existing" } });
   }
 
   const lookup = await lookupDecisionMakers({
     companyName,
-    website: website ?? account.website,
+    website: website ?? resolvedAccount.website,
   });
 
   if (!lookup.contacts.length) {
     await db.account.update({
-      where: { id: account.id },
+      where: { id: resolvedAccount.id },
       data: { enrichmentStatus: "FAILED" },
     });
 
@@ -82,14 +121,14 @@ export async function POST(request: NextRequest) {
       (person.email
         ? await db.contact.findFirst({
             where: {
-              accountId: account.id,
+              accountId: resolvedAccount.id,
               email: { equals: person.email, mode: "insensitive" },
             },
           })
         : null) ??
       (await db.contact.findFirst({
         where: {
-          accountId: account.id,
+          accountId: resolvedAccount.id,
           fullName: { equals: person.fullName, mode: "insensitive" },
           title: person.title ?? undefined,
         },
@@ -116,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     await db.contact.create({
       data: {
-        accountId: account.id,
+        accountId: resolvedAccount.id,
         ...person,
         lastVerifiedAt: new Date(),
       },
@@ -124,18 +163,18 @@ export async function POST(request: NextRequest) {
   }
 
   await db.account.update({
-    where: { id: account.id },
+    where: { id: resolvedAccount.id },
     data: { enrichmentStatus: "ENRICHED" },
   });
 
   const contacts = await db.contact.findMany({
-    where: { accountId: account.id, isDoNotContact: false },
+    where: { accountId: resolvedAccount.id, isDoNotContact: false },
     orderBy: { confidenceScore: "desc" },
   });
 
   return Response.json({
     data: {
-      account,
+      account: resolvedAccount,
       contacts,
       source: lookup.providersUsed.join("+") || "unknown",
       note: `Resolved website: ${lookup.resolvedWebsite ?? "n/a"}`,
