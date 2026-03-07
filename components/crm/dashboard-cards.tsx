@@ -1,12 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
+
+type DashboardCardItem = {
+  title: string;
+  subtitle?: string;
+  meta?: string;
+  href?: string;
+  badge?: string;
+};
 
 type DashboardCard = {
   id: string;
   label: string;
   value: number;
-  items: string[];
+  items: DashboardCardItem[];
   emptyMessage: string;
 };
 
@@ -34,7 +43,7 @@ export function DashboardCards({ cards }: DashboardCardsProps) {
           >
             <div className="text-sm text-slate-600">{card.label}</div>
             <div className="mt-1 text-2xl font-semibold">{card.value}</div>
-            <p className="mt-2 text-xs text-slate-500">Click to view details</p>
+            <p className="mt-2 text-xs text-slate-500">Click to view top {Math.min(card.items.length, 10)} items</p>
           </button>
         ))}
       </div>
@@ -65,8 +74,29 @@ export function DashboardCards({ cards }: DashboardCardsProps) {
             {activeCard.items.length ? (
               <ul className="space-y-2 text-sm">
                 {activeCard.items.map((item, index) => (
-                  <li key={`${activeCard.id}-${index}`} className="rounded-md border border-slate-200 px-3 py-2">
-                    {item}
+                  <li
+                    key={`${activeCard.id}-${index}`}
+                    className="rounded-md border border-slate-200 px-3 py-2"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{item.title}</p>
+                        {item.subtitle ? <p className="text-slate-600">{item.subtitle}</p> : null}
+                        {item.meta ? <p className="text-xs text-slate-500">{item.meta}</p> : null}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.badge ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                            {item.badge}
+                          </span>
+                        ) : null}
+                        {item.href ? (
+                          <Link href={item.href} className="text-xs text-blue-700 hover:underline">
+                            Open
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>

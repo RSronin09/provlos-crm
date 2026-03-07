@@ -8,12 +8,12 @@ export default async function CrmDashboardPage() {
   let queuedJobs = 0;
   let accountsNeedingEnrichment = 0;
   let reachableContacts = 0;
-  let accountItems: string[] = [];
-  let contactItems: string[] = [];
-  let openTaskItems: string[] = [];
-  let queuedJobItems: string[] = [];
-  let accountNeedItems: string[] = [];
-  let reachableContactItems: string[] = [];
+  let accountItems: { title: string; subtitle?: string; meta?: string; href?: string; badge?: string }[] = [];
+  let contactItems: { title: string; subtitle?: string; meta?: string; href?: string; badge?: string }[] = [];
+  let openTaskItems: { title: string; subtitle?: string; meta?: string; href?: string; badge?: string }[] = [];
+  let queuedJobItems: { title: string; subtitle?: string; meta?: string; href?: string; badge?: string }[] = [];
+  let accountNeedItems: { title: string; subtitle?: string; meta?: string; href?: string; badge?: string }[] = [];
+  let reachableContactItems: { title: string; subtitle?: string; meta?: string; href?: string; badge?: string }[] = [];
   let dbWarning: string | null = null;
 
   try {
@@ -38,36 +38,55 @@ export default async function CrmDashboardPage() {
       db.account.count({ where: { enrichmentStatus: { in: ["NOT_STARTED", "FAILED"] } } }),
       db.contact.count({ where: { isDoNotContact: false } }),
       db.account.findMany({
-        select: { companyName: true, stage: true },
+        select: { id: true, companyName: true, stage: true, state: true, region: true },
         orderBy: { updatedAt: "desc" },
         take: 10,
       }),
       db.contact.findMany({
-        select: { fullName: true, firstName: true, lastName: true, title: true },
+        select: {
+          id: true,
+          fullName: true,
+          firstName: true,
+          lastName: true,
+          title: true,
+          account: { select: { id: true, companyName: true } },
+        },
         orderBy: { updatedAt: "desc" },
         take: 10,
       }),
       db.task.findMany({
         where: { status: "OPEN" },
-        select: { type: true, dueAt: true, account: { select: { companyName: true } } },
+        select: { id: true, type: true, dueAt: true, account: { select: { id: true, companyName: true } } },
         orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
         take: 10,
       }),
       db.enrichmentJob.findMany({
         where: { status: "QUEUED" },
-        select: { jobType: true, account: { select: { companyName: true } } },
+        select: {
+          id: true,
+          jobType: true,
+          createdAt: true,
+          account: { select: { id: true, companyName: true } },
+        },
         orderBy: { createdAt: "asc" },
         take: 10,
       }),
       db.account.findMany({
         where: { enrichmentStatus: { in: ["NOT_STARTED", "FAILED"] } },
-        select: { companyName: true, enrichmentStatus: true },
+        select: { id: true, companyName: true, enrichmentStatus: true, stage: true },
         orderBy: { updatedAt: "desc" },
         take: 10,
       }),
       db.contact.findMany({
         where: { isDoNotContact: false },
-        select: { fullName: true, firstName: true, lastName: true, email: true },
+        select: {
+          id: true,
+          fullName: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          account: { select: { id: true, companyName: true } },
+        },
         orderBy: { updatedAt: "desc" },
         take: 10,
       }),
@@ -80,22 +99,52 @@ export default async function CrmDashboardPage() {
     accountsNeedingEnrichment = accountNeedCount;
     reachableContacts = reachableContactCount;
 
-    accountItems = accountRows.map((row) => `${row.companyName} (${row.stage})`);
+    accountItems = accountRows.map((row) => ({
+      title: row.companyName,
+      subtitle: [row.state, row.region].filter(Boolean).join(" - ") || "No location set",
+      badge: row.stage,
+      href: `/crm/accounts/${row.id}`,
+    }));
     contactItems = contactRows.map((row) => {
       const fullName = row.fullName || `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "Unnamed";
-      return `${fullName}${row.title ? ` - ${row.title}` : ""}`;
+      return {
+        title: fullName,
+        subtitle: row.title || "No title",
+        meta: row.account.companyName,
+        href: `/crm/accounts/${row.account.id}`,
+      };
     });
     openTaskItems = openTaskRows.map((row) => {
       const due = row.dueAt ? row.dueAt.toISOString().slice(0, 10) : "No due date";
-      return `${row.account.companyName} - ${row.type} (${due})`;
+      return {
+        title: row.account.companyName,
+        subtitle: `Task: ${row.type}`,
+        meta: `Due: ${due}`,
+        badge: "OPEN",
+        href: "/crm/tasks",
+      };
     });
-    queuedJobItems = queuedJobRows.map((row) => `${row.account.companyName} - ${row.jobType}`);
-    accountNeedItems = accountNeedRows.map(
-      (row) => `${row.companyName} (${row.enrichmentStatus})`,
-    );
+    queuedJobItems = queuedJobRows.map((row) => ({
+      title: row.account.companyName,
+      subtitle: `Job: ${row.jobType}`,
+      meta: `Queued at ${row.createdAt.toISOString().slice(0, 16).replace("T", " ")}`,
+      badge: "QUEUED",
+      href: `/crm/accounts/${row.account.id}`,
+    }));
+    accountNeedItems = accountNeedRows.map((row) => ({
+      title: row.companyName,
+      subtitle: `Stage: ${row.stage}`,
+      badge: row.enrichmentStatus,
+      href: `/crm/accounts/${row.id}`,
+    }));
     reachableContactItems = reachableContactRows.map((row) => {
       const fullName = row.fullName || `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "Unnamed";
-      return `${fullName}${row.email ? ` - ${row.email}` : ""}`;
+      return {
+        title: fullName,
+        subtitle: row.email || "No email",
+        meta: row.account.companyName,
+        href: `/crm/accounts/${row.account.id}`,
+      };
     });
   } catch {
     dbWarning = "Database is unreachable. Check DATABASE_URL and run migrations.";
