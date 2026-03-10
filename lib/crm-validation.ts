@@ -1,8 +1,6 @@
 import {
   AccountStage,
   ActivityType,
-  EnrichmentStatus,
-  JobType,
   LeadCandidateStatus,
   TaskStatus,
   TaskType,
@@ -24,7 +22,6 @@ export const accountCreateSchema = z.object({
   zip: z.string().optional().nullable(),
   region: z.string().optional().nullable(),
   stage: z.nativeEnum(AccountStage).optional(),
-  enrichmentStatus: z.nativeEnum(EnrichmentStatus).optional(),
   priorityScore: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   sourceRowJson: z.custom<Prisma.InputJsonValue>().optional().nullable(),
@@ -57,6 +54,12 @@ export const activityCreateSchema = z.object({
   occurredAt: z.coerce.date().optional(),
 });
 
+export const activityUpdateSchema = z.object({
+  outcome: z.string().optional().nullable(),
+  content: z.string().optional().nullable(),
+  occurredAt: z.coerce.date().optional(),
+});
+
 export const taskCreateSchema = z.object({
   contactId: z.string().uuid().optional().nullable(),
   type: z.nativeEnum(TaskType),
@@ -66,24 +69,6 @@ export const taskCreateSchema = z.object({
 });
 
 export const taskUpdateSchema = taskCreateSchema.partial();
-
-export const enqueueSchema = z
-  .object({
-    accountId: z.string().uuid().optional(),
-    jobType: z.nativeEnum(JobType).default(JobType.COMPANY_INTEL),
-    filters: z
-      .object({
-        stage: z.nativeEnum(AccountStage).optional(),
-        state: z.string().optional(),
-        enrichmentStatus: z.nativeEnum(EnrichmentStatus).optional(),
-        region: z.string().optional(),
-      })
-      .optional(),
-  })
-  .refine((payload) => payload.accountId || payload.filters, {
-    message: "Provide accountId or filters",
-    path: ["accountId"],
-  });
 
 export const discoveryEnqueueSchema = z.object({
   query: z.string().min(2),

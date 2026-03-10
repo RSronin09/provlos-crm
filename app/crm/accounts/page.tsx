@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { AccountStage, EnrichmentStatus, Prisma } from "@prisma/client";
+import { AccountStage, Prisma } from "@prisma/client";
 import Link from "next/link";
 import { DataTable } from "@/components/crm/ui/data-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
@@ -7,14 +7,12 @@ import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
 import { StageBadge } from "@/components/crm/ui/stage-badge";
-import { StatusBadge } from "@/components/crm/ui/status-badge";
 
 type AccountsPageProps = {
   searchParams?: {
     search?: string;
     industry?: string;
     stage?: AccountStage;
-    enrichmentStatus?: EnrichmentStatus;
     state?: string;
     region?: string;
     sort?: string;
@@ -48,7 +46,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
           ? { industry: { equals: filters.industry, mode: "insensitive" } }
           : {}),
         ...(filters.stage ? { stage: filters.stage } : {}),
-        ...(filters.enrichmentStatus ? { enrichmentStatus: filters.enrichmentStatus } : {}),
         ...(filters.state ? { state: { equals: filters.state, mode: "insensitive" } } : {}),
         ...(filters.region ? { region: { equals: filters.region, mode: "insensitive" } } : {}),
       },
@@ -62,7 +59,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Accounts" subtitle="Company records, lifecycle stages, and enrichment readiness." />
+      <PageHeader title="Accounts" subtitle="Company records and lifecycle stage tracking." />
 
       <FilterBar>
         <SearchInput
@@ -87,18 +84,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
           {Object.values(AccountStage).map((stage) => (
             <option key={stage} value={stage}>
               {stage}
-            </option>
-          ))}
-        </select>
-        <select
-          name="enrichmentStatus"
-          defaultValue={filters.enrichmentStatus ?? ""}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="">All enrichment statuses</option>
-          {Object.values(EnrichmentStatus).map((status) => (
-            <option key={status} value={status}>
-              {status}
             </option>
           ))}
         </select>
@@ -151,7 +136,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
           "Industry",
           "Stage",
           "Priority Score",
-          "Enrichment Status",
           "Contacts Count",
           "Phone",
           "Website",
@@ -171,9 +155,6 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
               <StageBadge stage={account.stage} />
             </td>
             <td className="px-4 py-3">{account.priorityScore ?? "-"}</td>
-            <td className="px-4 py-3">
-              <StatusBadge value={account.enrichmentStatus} />
-            </td>
             <td className="px-4 py-3">{account._count.contacts}</td>
             <td className="px-4 py-3">{account.phone ?? "-"}</td>
             <td className="px-4 py-3">

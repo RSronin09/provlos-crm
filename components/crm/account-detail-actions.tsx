@@ -57,15 +57,6 @@ export function AccountDetailActions({ accountId, initialNotes }: AccountDetailA
     }
   }
 
-  async function enqueue() {
-    try {
-      await request("/api/enrichment/enqueue", { accountId, jobType: "COMPANY_INTEL" });
-      setStatus("Enrichment job enqueued.");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Unknown error");
-    }
-  }
-
   async function addContact() {
     try {
       await request(`/api/accounts/${accountId}/contacts`, {
@@ -134,9 +125,6 @@ export function AccountDetailActions({ accountId, initialNotes }: AccountDetailA
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <button onClick={enqueue} type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-          Enqueue Enrichment
-        </button>
         <button onClick={addContact} type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
           Add Contact
         </button>

@@ -139,23 +139,6 @@ export function AccountRecordHeaderActions({
         >
           Create Task
         </button>
-        <button
-          onClick={() =>
-            run(
-              () =>
-                post("/api/enrichment/enqueue", {
-                  accountId,
-                  jobType: "COMPANY_INTEL",
-                }),
-              "Enrichment job enqueued.",
-            )
-          }
-          disabled={busy}
-          className="rounded-md bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-60"
-          type="button"
-        >
-          Enqueue Enrichment
-        </button>
       </div>
       {status ? <p className="text-xs text-slate-600">{status}</p> : null}
     </div>

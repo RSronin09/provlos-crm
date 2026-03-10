@@ -6,8 +6,7 @@ export default function Home() {
       <main className="w-full max-w-xl rounded-lg border border-slate-200 bg-white p-8">
         <h1 className="text-2xl font-semibold text-slate-900">ProvLOS CRM</h1>
         <p className="mt-2 text-sm text-slate-600">
-          CRM architecture v1 is installed. Use the dashboard to manage accounts, contacts, tasks,
-          and enrichment queues.
+          CRM architecture v1 is installed. Use the dashboard to manage accounts, contacts, and tasks.
         </p>
         <Link
           href="/crm"

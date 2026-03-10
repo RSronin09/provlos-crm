@@ -45,7 +45,6 @@ export async function POST(request: NextRequest, { params }: Params) {
         region: candidate.region,
         notes: candidate.signalSummary ?? undefined,
         stage: "TARGET",
-        enrichmentStatus: "NOT_STARTED",
       },
     }));
 

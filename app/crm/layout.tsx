@@ -10,7 +10,6 @@ const navItems = [
   { href: "/crm/pipeline", label: "Pipeline" },
   { href: "/crm/tasks", label: "Tasks" },
   { href: "/crm/discovery", label: "Lead Discovery" },
-  { href: "/crm/enrichment", label: "Enrichment Queue" },
   { href: "/crm/import", label: "Import Targets" },
   { href: "/crm/settings", label: "Settings" },
 ];

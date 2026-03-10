@@ -11,17 +11,14 @@ export default async function DashboardPage() {
     totalAccounts,
     contactsFound,
     openTasks,
-    queuedJobs,
     accountsByStage,
     recentActivities,
     upcomingTasks,
-    needsEnrichment,
     highPriorityTargets,
   ] = await Promise.all([
     db.account.count(),
     db.contact.count(),
     db.task.count({ where: { status: "OPEN" } }),
-    db.enrichmentJob.count({ where: { status: "QUEUED" } }),
     db.account.groupBy({ by: ["stage"], _count: { stage: true } }),
     db.activity.findMany({
       take: 8,
@@ -35,11 +32,6 @@ export default async function DashboardPage() {
       take: 8,
     }),
     db.account.findMany({
-      where: { enrichmentStatus: { in: ["NOT_STARTED", "FAILED"] } },
-      orderBy: { updatedAt: "desc" },
-      take: 8,
-    }),
-    db.account.findMany({
       where: { priorityScore: { gte: 70 } },
       orderBy: { priorityScore: "desc" },
       take: 8,
@@ -50,10 +42,10 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Dashboard"
-        subtitle="Operational snapshot across prospecting, discovery, enrichment, and outreach."
+        subtitle="Operational snapshot across prospecting, discovery, and outreach."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Total Accounts"
           value={totalAccounts}
@@ -78,15 +70,6 @@ export default async function DashboardPage() {
           footer={
             <Link href="/crm/tasks?view=open" className="text-xs text-blue-700 hover:underline">
               Open tasks view
-            </Link>
-          }
-        />
-        <MetricCard
-          label="Enrichment Jobs Queued"
-          value={queuedJobs}
-          footer={
-            <Link href="/crm/enrichment" className="text-xs text-blue-700 hover:underline">
-              Open queue
             </Link>
           }
         />
@@ -127,18 +110,6 @@ export default async function DashboardPage() {
               badge: task.status,
             })),
             emptyMessage: "No upcoming tasks.",
-          },
-          {
-            id: "needs-enrichment",
-            label: "Accounts needing enrichment",
-            value: needsEnrichment.length,
-            items: needsEnrichment.map((account) => ({
-              title: account.companyName,
-              subtitle: account.enrichmentStatus,
-              href: `/crm/accounts/${account.id}`,
-              badge: account.stage,
-            })),
-            emptyMessage: "No accounts waiting for enrichment.",
           },
           {
             id: "high-priority-targets",
@@ -189,16 +160,6 @@ export default async function DashboardPage() {
                   <p className="text-slate-600">
                     {task.type} {task.dueAt ? `- due ${task.dueAt.toISOString().slice(0, 10)}` : ""}
                   </p>
-                </li>
-              ))}
-            </ul>
-          </RightRailCard>
-          <RightRailCard title="Accounts Needing Enrichment">
-            <ul className="space-y-2 text-sm">
-              {needsEnrichment.map((account) => (
-                <li key={account.id} className="rounded-md border border-slate-200 px-3 py-2">
-                  <p className="font-medium">{account.companyName}</p>
-                  <p className="text-slate-600">{account.enrichmentStatus}</p>
                 </li>
               ))}
             </ul>

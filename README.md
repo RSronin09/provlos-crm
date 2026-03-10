@@ -1,6 +1,6 @@
 # ProvLOS CRM (Next.js + Prisma + Neon)
 
-Core CRM architecture v1 for account funneling, contact tracking, activities, tasks, and enrichment job queueing.
+Core CRM architecture v1 for account funneling, contact tracking, activities, and tasks.
 
 ## Local Setup
 
@@ -63,7 +63,6 @@ npm run prisma:deploy
 
 ## Deploy Notes
 
-- This app is Vercel-friendly: enrichment processing is request/job-based (`process-next` handles one queued job per request).
 - Set `DATABASE_URL` and `ADMIN_TOKEN` in Vercel Project Settings.
 - The Prisma datasource is configured to use only `env("DATABASE_URL")`; no localhost override should be used.
 - Health check endpoint: `GET /api/health`.
@@ -84,8 +83,6 @@ npm run prisma:deploy
   - `GET /api/tasks`
   - `POST /api/accounts/[id]/tasks` (admin)
   - `PATCH /api/tasks/[id]` (admin)
-  - `POST /api/enrichment/enqueue` (admin)
-  - `POST /api/enrichment/process-next` (admin)
   - `POST /api/discovery/enqueue` (admin)
   - `POST /api/discovery/process-next` (admin, processes one queued discovery job)
   - `GET /api/discovery/candidates`

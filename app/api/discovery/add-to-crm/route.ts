@@ -33,7 +33,6 @@ export async function POST(request: NextRequest) {
         state: state ?? undefined,
         region: region ?? undefined,
         stage: "TARGET",
-        enrichmentStatus: "ENRICHED",
       },
     }));
 

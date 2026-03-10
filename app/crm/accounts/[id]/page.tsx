@@ -41,10 +41,6 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
           orderBy: [{ status: "asc" }, { dueAt: "asc" }],
           take: 25,
         },
-        enrichmentJobs: {
-          orderBy: { createdAt: "desc" },
-          take: 5,
-        },
       },
     });
   } catch {
@@ -76,7 +72,6 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
         badges={
           <>
             <StageBadge stage={account.stage} />
-            <StatusBadge value={account.enrichmentStatus} />
             <StatusBadge value={account.priorityScore ? `PRIORITY ${account.priorityScore}` : "PRIORITY N/A"} />
           </>
         }
@@ -205,9 +200,6 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               </Link>
               <Link href="/crm/pipeline" className="text-blue-700 hover:underline">
                 Pipeline Board
-              </Link>
-              <Link href="/crm/enrichment" className="text-blue-700 hover:underline">
-                Enrichment Queue
               </Link>
               {account.website ? (
                 <a href={account.website} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">

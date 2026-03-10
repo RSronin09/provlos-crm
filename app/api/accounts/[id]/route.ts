@@ -23,7 +23,6 @@ export async function GET(_: NextRequest, { params }: Params) {
           contacts: true,
           activities: true,
           tasks: true,
-          enrichmentJobs: true,
         },
       },
     },

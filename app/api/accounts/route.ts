@@ -2,7 +2,7 @@ import { parsePositiveInt, unauthorizedResponse, zodErrorResponse } from "@/lib/
 import { isAdminRequest } from "@/lib/admin";
 import { accountCreateSchema } from "@/lib/crm-validation";
 import { db } from "@/lib/db";
-import { AccountStage, EnrichmentStatus, Prisma } from "@prisma/client";
+import { AccountStage, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -12,7 +12,6 @@ const accountFilterSchema = z.object({
   stage: z.nativeEnum(AccountStage).optional(),
   state: z.string().optional(),
   region: z.string().optional(),
-  enrichmentStatus: z.nativeEnum(EnrichmentStatus).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -26,14 +25,13 @@ export async function GET(request: NextRequest) {
     stage: params.get("stage") ?? undefined,
     state: params.get("state") ?? undefined,
     region: params.get("region") ?? undefined,
-    enrichmentStatus: params.get("enrichmentStatus") ?? undefined,
   });
 
   if (!parsed.success) {
     return zodErrorResponse(parsed.error);
   }
 
-  const { search, stage, state, enrichmentStatus, industry, region } = parsed.data;
+  const { search, stage, state, industry, region } = parsed.data;
   const where = {
     ...(search
       ? {
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
     ...(stage ? { stage } : {}),
     ...(state ? { state: { equals: state, mode: "insensitive" as const } } : {}),
     ...(region ? { region: { equals: region, mode: "insensitive" as const } } : {}),
-    ...(enrichmentStatus ? { enrichmentStatus } : {}),
   };
 
   const [items, total] = await Promise.all([

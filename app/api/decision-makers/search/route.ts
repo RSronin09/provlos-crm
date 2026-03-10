@@ -83,7 +83,6 @@ export async function POST(request: NextRequest) {
         state: state ?? undefined,
         region: region ?? undefined,
         stage: "TARGET",
-        enrichmentStatus: "IN_PROGRESS",
       },
     }));
 
@@ -102,11 +101,6 @@ export async function POST(request: NextRequest) {
   });
 
   if (!lookup.contacts.length) {
-    await db.account.update({
-      where: { id: resolvedAccount.id },
-      data: { enrichmentStatus: "FAILED" },
-    });
-
     return Response.json(
       {
         error:
@@ -161,11 +155,6 @@ export async function POST(request: NextRequest) {
       },
     });
   }
-
-  await db.account.update({
-    where: { id: resolvedAccount.id },
-    data: { enrichmentStatus: "ENRICHED" },
-  });
 
   const contacts = await db.contact.findMany({
     where: { accountId: resolvedAccount.id, isDoNotContact: false },
