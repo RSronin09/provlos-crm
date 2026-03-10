@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 
 export function isAdminRequest(request: NextRequest): boolean {
+  // Keep local/dev flows frictionless; enforce token checks only in production.
+  if (process.env.NODE_ENV !== "production") {
+    return true;
+  }
+
   const configured = process.env.ADMIN_TOKEN?.trim();
   if (!configured) {
     return false;
