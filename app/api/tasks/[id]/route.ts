@@ -30,3 +30,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   return Response.json({ data: task });
 }
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  if (!isAdminRequest(request)) {
+    return unauthorizedResponse();
+  }
+
+  const { id } = await params;
+  const idResult = uuidSchema.safeParse(id);
+  if (!idResult.success) {
+    return Response.json({ error: "Invalid task id" }, { status: 400 });
+  }
+
+  await db.task.delete({
+    where: { id },
+  });
+
+  return Response.json({ ok: true });
+}

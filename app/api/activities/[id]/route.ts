@@ -29,3 +29,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   return Response.json({ data: activity });
 }
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  if (!isAdminRequest(request)) {
+    return unauthorizedResponse();
+  }
+
+  const { id } = await params;
+  if (!uuidSchema.safeParse(id).success) {
+    return Response.json({ error: "Invalid activity id" }, { status: 400 });
+  }
+
+  await db.activity.delete({
+    where: { id },
+  });
+
+  return Response.json({ ok: true });
+}

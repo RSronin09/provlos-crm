@@ -1,14 +1,12 @@
 import { AccountDetailActions } from "@/components/crm/account-detail-actions";
+import { AccountRecordEditableCards } from "@/components/crm/account-record-editable-cards";
 import { AccountRecordHeaderActions } from "@/components/crm/account-record-header-actions";
-import { ActivityFeed } from "@/components/crm/ui/activity-feed";
-import { ContactListCard } from "@/components/crm/ui/contact-list-card";
 import { DetailTabs } from "@/components/crm/ui/detail-tabs";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { RecordHeader } from "@/components/crm/ui/record-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { StageBadge } from "@/components/crm/ui/stage-badge";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
-import { TaskListCard } from "@/components/crm/ui/task-list-card";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
@@ -91,83 +89,43 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
             ]}
           />
 
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-semibold">Overview</h3>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <Field label="Industry" value={account.industry} />
-              <Field label="Org Type" value={account.orgType} />
-              <Field label="Website" value={account.website} />
-              <Field label="Phone" value={account.phone} />
-              <Field label="City" value={account.city} />
-              <Field label="State" value={account.state} />
-              <Field label="Region" value={account.region} />
-              <Field label="Priority Score" value={account.priorityScore?.toString()} />
-            </dl>
-          </section>
+          <AccountRecordEditableCards
+            accountId={account.id}
+            account={{
+              industry: account.industry,
+              orgType: account.orgType,
+              website: account.website,
+              phone: account.phone,
+              city: account.city,
+              state: account.state,
+              region: account.region,
+              priorityScore: account.priorityScore,
+              notes: account.notes,
+            }}
+            contacts={account.contacts.map((contact) => ({
+              id: contact.id,
+              title:
+                contact.fullName ||
+                `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
+                "Unnamed contact",
+              subtitle: contact.title ?? null,
+              meta: `${contact.email ?? "No email"} | ${contact.phone ?? "No phone"}`,
+            }))}
+            activities={account.activities.map((activity) => ({
+              id: activity.id,
+              type: activity.type,
+              content: activity.content,
+              outcome: activity.outcome,
+              occurredAt: activity.occurredAt.toISOString(),
+            }))}
+            tasks={account.tasks.map((task) => ({
+              id: task.id,
+              type: task.type,
+              status: task.status,
+              notes: task.notes,
+            }))}
+          />
 
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-semibold">Notes</h3>
-            <p className="text-sm text-slate-600">{account.notes ?? "No notes saved."}</p>
-          </section>
-
-          <section id="contacts" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <ContactListCard
-              title="Contacts"
-              contacts={account.contacts.map((contact) => ({
-                id: contact.id,
-                title:
-                  contact.fullName ||
-                  `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
-                  "Unnamed contact",
-                subtitle: contact.title ?? "No title",
-                meta: `${contact.email ?? "No email"} | ${contact.phone ?? "No phone"}`,
-              }))}
-            />
-          </section>
-
-          <section id="activities" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-semibold">Activities</h3>
-            <ActivityFeed
-              items={account.activities.map((activity) => ({
-                id: activity.id,
-                title: activity.type,
-                content: activity.content ?? activity.outcome,
-                timestamp: activity.occurredAt.toISOString().slice(0, 16).replace("T", " "),
-              }))}
-            />
-          </section>
-
-          <section id="tasks" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <TaskListCard
-              title="Tasks"
-              tasks={account.tasks.map((task) => ({
-                id: task.id,
-                title: task.type,
-                subtitle: task.notes ?? undefined,
-                status: task.status,
-              }))}
-            />
-          </section>
-
-          <section id="timeline" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-semibold">Timeline</h3>
-            <ActivityFeed
-              items={[
-                ...account.activities.map((activity) => ({
-                  id: `activity-${activity.id}`,
-                  title: `Activity: ${activity.type}`,
-                  content: activity.content ?? activity.outcome,
-                  timestamp: activity.occurredAt.toISOString().slice(0, 16).replace("T", " "),
-                })),
-                ...account.tasks.map((task) => ({
-                  id: `task-${task.id}`,
-                  title: `Task ${task.status}: ${task.type}`,
-                  content: task.notes,
-                  timestamp: task.updatedAt.toISOString().slice(0, 16).replace("T", " "),
-                })),
-              ].sort((a, b) => b.timestamp.localeCompare(a.timestamp))}
-            />
-          </section>
         </div>
 
         <div className="space-y-4">
@@ -221,15 +179,6 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
           <AccountDetailActions accountId={account.id} initialNotes={account.notes ?? ""} />
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="font-medium">{value || "-"}</dd>
     </div>
   );
 }
