@@ -1,5 +1,4 @@
-import { unauthorizedResponse, uuidSchema, zodErrorResponse } from "@/lib/api";
-import { isAdminRequest } from "@/lib/admin";
+import { uuidSchema, zodErrorResponse } from "@/lib/api";
 import { db } from "@/lib/db";
 import { AccountStage, ActivityType } from "@prisma/client";
 import { NextRequest } from "next/server";
@@ -14,10 +13,6 @@ const moveStageSchema = z.object({
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
-  if (!isAdminRequest(request)) {
-    return unauthorizedResponse();
-  }
-
   const { id } = await params;
   if (!uuidSchema.safeParse(id).success) {
     return Response.json({ error: "Invalid account id" }, { status: 400 });

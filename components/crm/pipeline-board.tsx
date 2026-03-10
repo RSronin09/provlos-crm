@@ -51,7 +51,6 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
   const [moveNote, setMoveNote] = useState("");
   const [noteFrom, setNoteFrom] = useState("");
-  const [adminToken, setAdminToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -90,7 +89,6 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-admin-token": adminToken,
         },
         body: JSON.stringify({
           toStage: pendingMove.toStage,
@@ -124,19 +122,6 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="text-sm font-medium text-slate-700">
-          Admin Token (required for drag-and-drop stage changes)
-          <input
-            type="password"
-            value={adminToken}
-            onChange={(event) => setAdminToken(event.target.value)}
-            className="mt-1 w-full max-w-md rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Paste ADMIN_TOKEN"
-          />
-        </label>
-      </div>
-
       <div className="grid gap-4 xl:grid-cols-3">
         {STAGES.map((stage) => (
           <section
