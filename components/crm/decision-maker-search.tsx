@@ -59,8 +59,10 @@ export function DecisionMakerSearch() {
         throw new Error(payload.error ?? "Search failed");
       }
 
-      setResult(payload.data as SearchResult);
-      setStatus(`Found ${payload.data.contacts.length} decision makers for ${payload.data.account.companyName}.`);
+      const data = payload.data as SearchResult;
+      setResult(data);
+      const label = data.account?.companyName ?? companyName;
+      setStatus(`Found ${data.contacts.length} decision makers for ${label}.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unknown error");
       setResult(null);
