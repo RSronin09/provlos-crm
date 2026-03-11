@@ -4,7 +4,6 @@ import { DataTable } from "@/components/crm/ui/data-table";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
-import { StatusBadge } from "@/components/crm/ui/status-badge";
 import Link from "next/link";
 
 type TasksPageProps = {
@@ -84,10 +83,12 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         </button>
       </FilterBar>
 
-      <DataTable headers={["Task Type", "Account", "Contact", "Due Date", "Status", "Notes Preview"]}>
-        {tasks.map((task) => (
+      <DataTable headers={["Task Title", "Account", "Contact", "Due Date", "Status", "Notes Preview"]}>
+        {tasks.map((task) => {
+          const parsed = parseTaskPayload(task.type, task.notes);
+          return (
           <tr key={task.id} className="border-t border-slate-200 hover:bg-slate-50">
-            <td className="px-4 py-3">{task.type}</td>
+            <td className="px-4 py-3">{parsed.title}</td>
             <td className="px-4 py-3">
               <Link href={`/crm/accounts/${task.accountId}#tasks`} className="text-blue-700 hover:underline">
                 {task.account.companyName}
@@ -96,14 +97,11 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
             <td className="px-4 py-3">{task.contact?.fullName ?? "-"}</td>
             <td className="px-4 py-3">{task.dueAt ? task.dueAt.toISOString().slice(0, 10) : "-"}</td>
             <td className="px-4 py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge value={task.status} />
-                <TaskTimelineBadge dueAt={task.dueAt} status={task.status} />
-              </div>
+              <TaskTimelineBadge dueAt={task.dueAt} status={task.status} />
             </td>
-            <td className="px-4 py-3">{task.notes?.slice(0, 90) ?? "-"}</td>
+            <td className="px-4 py-3">{parsed.body?.slice(0, 90) ?? "-"}</td>
           </tr>
-        ))}
+        )})}
       </DataTable>
       {dbWarning ? (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -148,4 +146,23 @@ function TaskTimelineBadge({
   }
 
   return <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700">Open</span>;
+}
+
+function parseTaskPayload(taskType: string, notes: string | null) {
+  if (!notes) {
+    return { title: taskType, body: null as string | null };
+  }
+
+  const [firstLine, ...rest] = notes.split("\n");
+  if (firstLine.startsWith("[TITLE] ")) {
+    return {
+      title: firstLine.replace("[TITLE] ", "").trim() || taskType,
+      body: rest.join("\n").trim() || null,
+    };
+  }
+
+  return {
+    title: taskType,
+    body: notes,
+  };
 }

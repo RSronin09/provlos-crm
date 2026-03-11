@@ -15,6 +15,7 @@ type EditableActivity = {
 type EditableTask = {
   id: string;
   type: string;
+  title: string;
   status: string;
   notes: string | null;
   dueAt: string | null;
@@ -81,14 +82,25 @@ export function AccountRecordEditableCards({
   const [notes, setNotes] = useState(account.notes ?? "");
   const [contacts, setContacts] = useState(initialContacts);
   const [activities, setActivities] = useState(initialActivities);
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState(
+    initialTasks.map((task) => {
+      const parsed = parseTaskPayload(task.type, task.notes);
+      return {
+        ...task,
+        title: parsed.title,
+        notes: parsed.body,
+      };
+    }),
+  );
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [editingActivityContent, setEditingActivityContent] = useState("");
   const [editingActivityOutcome, setEditingActivityOutcome] = useState("");
   const [newActivityNote, setNewActivityNote] = useState("");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskNote, setNewTaskNote] = useState("");
   const [newTaskDueAt, setNewTaskDueAt] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState("");
   const [editingTaskNotes, setEditingTaskNotes] = useState("");
   const [editingTaskDueAt, setEditingTaskDueAt] = useState("");
 
@@ -218,14 +230,18 @@ export function AccountRecordEditableCards({
   }
 
   async function createTaskNote() {
+    const title = newTaskTitle.trim();
     const notes = newTaskNote.trim();
+    if (!title) {
+      throw new Error("Add a task title.");
+    }
     if (!notes) {
       throw new Error("Write task notes before adding.");
     }
 
     const payload = await request(`/api/accounts/${accountId}/tasks`, "POST", {
       type: "RESEARCH",
-      notes,
+      notes: buildTaskNotes(title, notes),
       dueAt: newTaskDueAt ? new Date(`${newTaskDueAt}T00:00:00`).toISOString() : null,
     });
 
@@ -236,25 +252,32 @@ export function AccountRecordEditableCards({
       notes: string | null;
       dueAt: string | null;
     };
+    const parsed = parseTaskPayload(created.type, created.notes);
 
     setTasks((prev) => [
       {
         id: created.id,
         type: created.type,
+        title: parsed.title,
         status: created.status,
-        notes: created.notes,
+        notes: parsed.body,
         dueAt: created.dueAt,
       },
       ...prev,
     ]);
+    setNewTaskTitle("");
     setNewTaskNote("");
     setNewTaskDueAt("");
     router.refresh();
   }
 
   async function saveTask(taskId: string) {
+    const title = editingTaskTitle.trim();
+    if (!title) {
+      throw new Error("Task title is required.");
+    }
     await request(`/api/tasks/${taskId}`, "PATCH", {
-      notes: editingTaskNotes.trim() || null,
+      notes: buildTaskNotes(title, editingTaskNotes.trim()),
       dueAt: editingTaskDueAt ? new Date(`${editingTaskDueAt}T00:00:00`).toISOString() : null,
     });
 
@@ -263,6 +286,7 @@ export function AccountRecordEditableCards({
         task.id === taskId
           ? {
               ...task,
+              title,
               notes: editingTaskNotes.trim() || null,
               dueAt: editingTaskDueAt ? new Date(`${editingTaskDueAt}T00:00:00`).toISOString() : null,
             }
@@ -270,6 +294,7 @@ export function AccountRecordEditableCards({
       ),
     );
     setEditingTaskId(null);
+    setEditingTaskTitle("");
     setEditingTaskNotes("");
     setEditingTaskDueAt("");
     router.refresh();
@@ -298,7 +323,7 @@ export function AccountRecordEditableCards({
         })),
         ...tasks.map((task) => ({
           id: `task-${task.id}`,
-          title: `Task ${task.status}: ${task.type}`,
+          title: `Task ${task.status}: ${task.title}`,
           content: task.notes,
           timestamp: task.dueAt
             ? task.dueAt.slice(0, 16).replace("T", " ")
@@ -622,6 +647,12 @@ export function AccountRecordEditableCards({
       <section id="tasks" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="mb-3 text-lg font-semibold">Task Notes</h3>
         <div className="mb-3 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <input
+            value={newTaskTitle}
+            onChange={(event) => setNewTaskTitle(event.target.value)}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="Task title"
+          />
           <textarea
             value={newTaskNote}
             onChange={(event) => setNewTaskNote(event.target.value)}
@@ -663,11 +694,17 @@ export function AccountRecordEditableCards({
                 ×
               </button>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium">{task.type}</p>
+                <p className="text-sm font-medium">{task.title}</p>
                 <StatusBadge value={task.status} />
               </div>
               {editingTaskId === task.id ? (
                 <div className="mt-2 space-y-2">
+                  <input
+                    value={editingTaskTitle}
+                    onChange={(event) => setEditingTaskTitle(event.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Task title"
+                  />
                   <textarea
                     value={editingTaskNotes}
                     onChange={(event) => setEditingTaskNotes(event.target.value)}
@@ -704,6 +741,7 @@ export function AccountRecordEditableCards({
                     className="mt-2 rounded-md border border-slate-300 px-2 py-1 text-xs"
                     onClick={() => {
                       setEditingTaskId(task.id);
+                      setEditingTaskTitle(task.title);
                       setEditingTaskNotes(task.notes ?? "");
                       setEditingTaskDueAt(task.dueAt ? toInputDate(task.dueAt) : "");
                     }}
@@ -791,4 +829,28 @@ function toInputDate(value: string) {
 
 function formatDate(value: string) {
   return value.slice(0, 10);
+}
+
+function parseTaskPayload(taskType: string, notes: string | null) {
+  if (!notes) {
+    return { title: taskType, body: null as string | null };
+  }
+
+  const [firstLine, ...rest] = notes.split("\n");
+  if (firstLine.startsWith("[TITLE] ")) {
+    return {
+      title: firstLine.replace("[TITLE] ", "").trim() || taskType,
+      body: rest.join("\n").trim() || null,
+    };
+  }
+
+  return {
+    title: taskType,
+    body: notes,
+  };
+}
+
+function buildTaskNotes(title: string, body: string) {
+  const trimmedBody = body.trim();
+  return trimmedBody ? `[TITLE] ${title.trim()}\n${trimmedBody}` : `[TITLE] ${title.trim()}`;
 }
