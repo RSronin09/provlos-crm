@@ -14,7 +14,6 @@ export function AccountRecordHeaderActions({
   initialNotes,
 }: AccountRecordHeaderActionsProps) {
   const router = useRouter();
-  const [adminToken, setAdminToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -23,7 +22,6 @@ export function AccountRecordHeaderActions({
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-admin-token": adminToken,
       },
       body: JSON.stringify(body),
     });
@@ -39,7 +37,6 @@ export function AccountRecordHeaderActions({
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "x-admin-token": adminToken,
       },
       body: JSON.stringify(body),
     });
@@ -72,13 +69,6 @@ export function AccountRecordHeaderActions({
 
   return (
     <div className="space-y-2">
-      <input
-        type="password"
-        value={adminToken}
-        onChange={(event) => setAdminToken(event.target.value)}
-        placeholder="Admin token for actions"
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-      />
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => run(editAccount, "Account updated.")}

@@ -9,7 +9,6 @@ type AccountDetailActionsProps = {
 };
 
 export function AccountDetailActions({ accountId, initialNotes }: AccountDetailActionsProps) {
-  const [adminToken, setAdminToken] = useState("");
   const [notes, setNotes] = useState(initialNotes);
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -19,7 +18,6 @@ export function AccountDetailActions({ accountId, initialNotes }: AccountDetailA
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-admin-token": adminToken,
       },
       body: JSON.stringify(body),
     });
@@ -39,7 +37,6 @@ export function AccountDetailActions({ accountId, initialNotes }: AccountDetailA
         method: "PATCH",
         headers: {
           "content-type": "application/json",
-          "x-admin-token": adminToken,
         },
         body: JSON.stringify({ notes }),
       });
@@ -95,17 +92,6 @@ export function AccountDetailActions({ accountId, initialNotes }: AccountDetailA
 
   return (
     <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <label className="block text-sm font-medium text-slate-700">
-        Admin Token (required for write actions)
-        <input
-          type="password"
-          value={adminToken}
-          onChange={(event) => setAdminToken(event.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          placeholder="Paste ADMIN_TOKEN for dev writes"
-        />
-      </label>
-
       <div>
         <div className="mb-1 text-sm font-medium text-slate-700">Editable Notes</div>
         <textarea

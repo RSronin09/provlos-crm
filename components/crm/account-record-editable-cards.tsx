@@ -17,6 +17,7 @@ type EditableTask = {
   type: string;
   status: string;
   notes: string | null;
+  dueAt: string | null;
 };
 
 type EditableContact = {
@@ -62,7 +63,6 @@ export function AccountRecordEditableCards({
   tasks: initialTasks,
 }: AccountRecordEditableCardsProps) {
   const router = useRouter();
-  const [adminToken, setAdminToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,13 +85,18 @@ export function AccountRecordEditableCards({
   const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const [editingActivityContent, setEditingActivityContent] = useState("");
   const [editingActivityOutcome, setEditingActivityOutcome] = useState("");
+  const [newActivityNote, setNewActivityNote] = useState("");
+  const [newTaskNote, setNewTaskNote] = useState("");
+  const [newTaskDueAt, setNewTaskDueAt] = useState("");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskNotes, setEditingTaskNotes] = useState("");
+  const [editingTaskDueAt, setEditingTaskDueAt] = useState("");
 
-  async function request(path: string, method: "PATCH" | "DELETE", body?: unknown) {
+  async function request(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown) {
     const response = await fetch(path, {
       method,
       headers: {
         "content-type": "application/json",
-        ...(adminToken ? { "x-admin-token": adminToken } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
@@ -173,9 +178,100 @@ export function AccountRecordEditableCards({
     router.refresh();
   }
 
+  async function createActivityNote() {
+    const content = newActivityNote.trim();
+    if (!content) {
+      throw new Error("Write a note before adding.");
+    }
+
+    const payload = await request(`/api/accounts/${accountId}/activities`, "POST", {
+      type: "NOTE",
+      content,
+    });
+
+    const created = payload.data as {
+      id: string;
+      type: string;
+      content: string | null;
+      outcome: string | null;
+      occurredAt: string;
+    };
+
+    setActivities((prev) => [
+      {
+        id: created.id,
+        type: created.type,
+        content: created.content,
+        outcome: created.outcome,
+        occurredAt: created.occurredAt,
+      },
+      ...prev,
+    ]);
+    setNewActivityNote("");
+    router.refresh();
+  }
+
   async function deleteActivity(activityId: string) {
     await request(`/api/activities/${activityId}`, "DELETE");
     setActivities((prev) => prev.filter((activity) => activity.id !== activityId));
+    router.refresh();
+  }
+
+  async function createTaskNote() {
+    const notes = newTaskNote.trim();
+    if (!notes) {
+      throw new Error("Write task notes before adding.");
+    }
+
+    const payload = await request(`/api/accounts/${accountId}/tasks`, "POST", {
+      type: "RESEARCH",
+      notes,
+      dueAt: newTaskDueAt ? new Date(`${newTaskDueAt}T00:00:00`).toISOString() : null,
+    });
+
+    const created = payload.data as {
+      id: string;
+      type: string;
+      status: string;
+      notes: string | null;
+      dueAt: string | null;
+    };
+
+    setTasks((prev) => [
+      {
+        id: created.id,
+        type: created.type,
+        status: created.status,
+        notes: created.notes,
+        dueAt: created.dueAt,
+      },
+      ...prev,
+    ]);
+    setNewTaskNote("");
+    setNewTaskDueAt("");
+    router.refresh();
+  }
+
+  async function saveTask(taskId: string) {
+    await request(`/api/tasks/${taskId}`, "PATCH", {
+      notes: editingTaskNotes.trim() || null,
+      dueAt: editingTaskDueAt ? new Date(`${editingTaskDueAt}T00:00:00`).toISOString() : null,
+    });
+
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              notes: editingTaskNotes.trim() || null,
+              dueAt: editingTaskDueAt ? new Date(`${editingTaskDueAt}T00:00:00`).toISOString() : null,
+            }
+          : task,
+      ),
+    );
+    setEditingTaskId(null);
+    setEditingTaskNotes("");
+    setEditingTaskDueAt("");
     router.refresh();
   }
 
@@ -204,7 +300,9 @@ export function AccountRecordEditableCards({
           id: `task-${task.id}`,
           title: `Task ${task.status}: ${task.type}`,
           content: task.notes,
-          timestamp: new Date().toISOString().slice(0, 16).replace("T", " "),
+          timestamp: task.dueAt
+            ? task.dueAt.slice(0, 16).replace("T", " ")
+            : new Date().toISOString().slice(0, 16).replace("T", " "),
         })),
       ].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
     [activities, tasks],
@@ -212,19 +310,6 @@ export function AccountRecordEditableCards({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="block text-sm font-medium text-slate-700">
-          Admin Token (required in production)
-          <input
-            type="password"
-            value={adminToken}
-            onChange={(event) => setAdminToken(event.target.value)}
-            placeholder="Optional in local development"
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-      </section>
-
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-lg font-semibold">Overview</h3>
@@ -446,7 +531,24 @@ export function AccountRecordEditableCards({
       </section>
 
       <section id="activities" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-lg font-semibold">Activities</h3>
+        <h3 className="mb-3 text-lg font-semibold">Activity Notes</h3>
+        <div className="mb-3 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <textarea
+            value={newActivityNote}
+            onChange={(event) => setNewActivityNote(event.target.value)}
+            rows={2}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="Add a new activity note..."
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(createActivityNote, "Activity note added.")}
+            className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            Add Activity Note
+          </button>
+        </div>
         <ul className="space-y-2">
           {activities.map((activity) => {
             const editing = editingActivityId === activity.id;
@@ -518,7 +620,33 @@ export function AccountRecordEditableCards({
       </section>
 
       <section id="tasks" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-lg font-semibold">Tasks</h3>
+        <h3 className="mb-3 text-lg font-semibold">Task Notes</h3>
+        <div className="mb-3 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <textarea
+            value={newTaskNote}
+            onChange={(event) => setNewTaskNote(event.target.value)}
+            rows={2}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="Add a new task note..."
+          />
+          <label className="block text-sm text-slate-700">
+            Optional due date
+            <input
+              type="date"
+              value={newTaskDueAt}
+              onChange={(event) => setNewTaskDueAt(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(createTaskNote, "Task note added.")}
+            className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            Add Task Note
+          </button>
+        </div>
         <ul className="space-y-2">
           {tasks.map((task) => (
             <li key={task.id} className="relative rounded-md border border-slate-200 px-3 py-2">
@@ -538,7 +666,52 @@ export function AccountRecordEditableCards({
                 <p className="text-sm font-medium">{task.type}</p>
                 <StatusBadge value={task.status} />
               </div>
-              {task.notes ? <p className="mt-1 text-sm text-slate-600">{task.notes}</p> : null}
+              {editingTaskId === task.id ? (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    value={editingTaskNotes}
+                    onChange={(event) => setEditingTaskNotes(event.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Task notes"
+                  />
+                  <label className="block text-sm text-slate-700">
+                    Optional due date
+                    <input
+                      type="date"
+                      value={editingTaskDueAt}
+                      onChange={(event) => setEditingTaskDueAt(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => run(() => saveTask(task.id), "Task note updated.")}
+                    className="rounded-md bg-slate-900 px-2 py-1 text-xs text-white disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {task.notes ? <p className="mt-1 text-sm text-slate-600">{task.notes}</p> : null}
+                  <p className="mt-1 text-xs text-slate-500">
+                    Due: {task.dueAt ? formatDate(task.dueAt) : "-"}
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-2 rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    onClick={() => {
+                      setEditingTaskId(task.id);
+                      setEditingTaskNotes(task.notes ?? "");
+                      setEditingTaskDueAt(task.dueAt ? toInputDate(task.dueAt) : "");
+                    }}
+                  >
+                    Edit
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -610,4 +783,12 @@ function Field({
       <dd className="font-medium">{value || "-"}</dd>
     </div>
   );
+}
+
+function toInputDate(value: string) {
+  return value.slice(0, 10);
+}
+
+function formatDate(value: string) {
+  return value.slice(0, 10);
 }

@@ -123,6 +123,7 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               type: task.type,
               status: task.status,
               notes: task.notes,
+              dueAt: task.dueAt?.toISOString() ?? null,
             }))}
           />
 

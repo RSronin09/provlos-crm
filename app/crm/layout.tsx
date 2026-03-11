@@ -11,7 +11,6 @@ const navItems = [
   { href: "/crm/tasks", label: "Tasks" },
   { href: "/crm/discovery", label: "Lead Discovery" },
   { href: "/crm/import", label: "Import Targets" },
-  { href: "/crm/settings", label: "Settings" },
 ];
 
 export default function CrmLayout({ children }: { children: ReactNode }) {
