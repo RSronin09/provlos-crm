@@ -67,6 +67,25 @@ export function AccountRecordHeaderActions({
     await patch(`/api/accounts/${accountId}`, { notes: nextNotes });
   }
 
+  async function createTaskFromHeader() {
+    const dueDate = window.prompt("Enter due date (YYYY-MM-DD)");
+    if (dueDate === null) return;
+    const trimmed = dueDate.trim();
+    if (!trimmed) {
+      throw new Error("Due date is required.");
+    }
+    const parsed = new Date(`${trimmed}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error("Invalid due date. Use YYYY-MM-DD.");
+    }
+
+    await post(`/api/accounts/${accountId}/tasks`, {
+      type: TaskType.RESEARCH,
+      notes: "Follow-up task created from account header",
+      dueAt: parsed.toISOString(),
+    });
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -115,11 +134,7 @@ export function AccountRecordHeaderActions({
         <button
           onClick={() =>
             run(
-              () =>
-                post(`/api/accounts/${accountId}/tasks`, {
-                  type: TaskType.RESEARCH,
-                  notes: "Follow-up task created from account header",
-                }),
+              createTaskFromHeader,
               "Task created.",
             )
           }

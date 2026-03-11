@@ -232,17 +232,21 @@ export function AccountRecordEditableCards({
   async function createTaskNote() {
     const title = newTaskTitle.trim();
     const notes = newTaskNote.trim();
+    const dueAt = newTaskDueAt.trim();
     if (!title) {
       throw new Error("Add a task title.");
     }
     if (!notes) {
       throw new Error("Write task notes before adding.");
     }
+    if (!dueAt) {
+      throw new Error("Due date is required.");
+    }
 
     const payload = await request(`/api/accounts/${accountId}/tasks`, "POST", {
       type: "RESEARCH",
       notes: buildTaskNotes(title, notes),
-      dueAt: newTaskDueAt ? new Date(`${newTaskDueAt}T00:00:00`).toISOString() : null,
+      dueAt: new Date(`${dueAt}T00:00:00`).toISOString(),
     });
 
     const created = payload.data as {
@@ -273,12 +277,16 @@ export function AccountRecordEditableCards({
 
   async function saveTask(taskId: string) {
     const title = editingTaskTitle.trim();
+    const dueAt = editingTaskDueAt.trim();
     if (!title) {
       throw new Error("Task title is required.");
     }
+    if (!dueAt) {
+      throw new Error("Due date is required.");
+    }
     await request(`/api/tasks/${taskId}`, "PATCH", {
       notes: buildTaskNotes(title, editingTaskNotes.trim()),
-      dueAt: editingTaskDueAt ? new Date(`${editingTaskDueAt}T00:00:00`).toISOString() : null,
+      dueAt: new Date(`${dueAt}T00:00:00`).toISOString(),
     });
 
     setTasks((prev) =>
@@ -288,7 +296,7 @@ export function AccountRecordEditableCards({
               ...task,
               title,
               notes: editingTaskNotes.trim() || null,
-              dueAt: editingTaskDueAt ? new Date(`${editingTaskDueAt}T00:00:00`).toISOString() : null,
+              dueAt: new Date(`${dueAt}T00:00:00`).toISOString(),
             }
           : task,
       ),
@@ -661,12 +669,13 @@ export function AccountRecordEditableCards({
             placeholder="Add a new task note..."
           />
           <label className="block text-sm text-slate-700">
-            Optional due date
+            Due date
             <input
               type="date"
               value={newTaskDueAt}
               onChange={(event) => setNewTaskDueAt(event.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              required
             />
           </label>
           <button
@@ -713,12 +722,13 @@ export function AccountRecordEditableCards({
                     placeholder="Task notes"
                   />
                   <label className="block text-sm text-slate-700">
-                    Optional due date
+                    Due date
                     <input
                       type="date"
                       value={editingTaskDueAt}
                       onChange={(event) => setEditingTaskDueAt(event.target.value)}
                       className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      required
                     />
                   </label>
                   <button

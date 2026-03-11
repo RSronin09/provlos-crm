@@ -64,7 +64,7 @@ export const taskCreateSchema = z.object({
   contactId: z.string().uuid().optional().nullable(),
   type: z.nativeEnum(TaskType),
   status: z.nativeEnum(TaskStatus).optional(),
-  dueAt: z.coerce.date().optional().nullable(),
+  dueAt: z.coerce.date(),
   notes: z.string().optional().nullable(),
 });
 

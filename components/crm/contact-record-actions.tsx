@@ -100,12 +100,25 @@ export function ContactRecordActions({
           type="button"
           onClick={() =>
             run(
-              () =>
-                post(`/api/accounts/${accountId}/tasks`, {
+              async () => {
+                const dueDate = window.prompt("Enter due date (YYYY-MM-DD)");
+                if (dueDate === null) return;
+                const trimmed = dueDate.trim();
+                if (!trimmed) {
+                  throw new Error("Due date is required.");
+                }
+                const parsed = new Date(`${trimmed}T00:00:00`);
+                if (Number.isNaN(parsed.getTime())) {
+                  throw new Error("Invalid due date. Use YYYY-MM-DD.");
+                }
+
+                await post(`/api/accounts/${accountId}/tasks`, {
                   contactId,
                   type: TaskType.EMAIL_FOLLOWUP,
                   notes: "Follow up with this contact",
-                }),
+                  dueAt: parsed.toISOString(),
+                });
+              },
               "Task created.",
             )
           }

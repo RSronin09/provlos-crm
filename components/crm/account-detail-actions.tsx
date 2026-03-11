@@ -80,9 +80,21 @@ export function AccountDetailActions({ accountId, initialNotes }: AccountDetailA
 
   async function createTask() {
     try {
+      const dueDate = window.prompt("Enter due date (YYYY-MM-DD)");
+      if (dueDate === null) return;
+      const trimmed = dueDate.trim();
+      if (!trimmed) {
+        throw new Error("Due date is required.");
+      }
+      const parsed = new Date(`${trimmed}T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new Error("Invalid due date. Use YYYY-MM-DD.");
+      }
+
       await request(`/api/accounts/${accountId}/tasks`, {
         type: TaskType.RESEARCH,
         notes: "Research account decision makers",
+        dueAt: parsed.toISOString(),
       });
       setStatus("Task created.");
     } catch (error) {
