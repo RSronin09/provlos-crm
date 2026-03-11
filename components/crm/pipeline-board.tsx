@@ -14,6 +14,8 @@ type Stage =
   | "WON"
   | "LOST";
 
+type PipelineStage = Exclude<Stage, "ENRICHED">;
+
 type PipelineAccount = {
   id: string;
   companyName: string;
@@ -28,13 +30,12 @@ type PipelineBoardProps = {
   accounts: PipelineAccount[];
 };
 
-const STAGES: Stage[] = [
+const STAGES: PipelineStage[] = [
   "TARGET",
   "ENRICHING",
-  "ENRICHED",
   "CONTACTED",
-  "ENGAGED",
   "QUALIFIED",
+  "ENGAGED",
   "PROPOSAL",
   "WON",
   "LOST",
@@ -42,8 +43,16 @@ const STAGES: Stage[] = [
 
 type PendingMove = {
   accountId: string;
-  toStage: Stage;
+  toStage: PipelineStage;
 };
+
+function renderStage(stage: Stage): PipelineStage {
+  // Legacy ENRICHED records should remain visible after removing that lane.
+  if (stage === "ENRICHED") {
+    return "CONTACTED";
+  }
+  return stage;
+}
 
 export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps) {
   const [accounts, setAccounts] = useState(initialAccounts);
@@ -57,15 +66,18 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
   const byStage = useMemo(
     () =>
       Object.fromEntries(
-        STAGES.map((stage) => [stage, accounts.filter((account) => account.stage === stage)]),
-      ) as Record<Stage, PipelineAccount[]>,
+        STAGES.map((stage) => [
+          stage,
+          accounts.filter((account) => renderStage(account.stage) === stage),
+        ]),
+      ) as Record<PipelineStage, PipelineAccount[]>,
     [accounts],
   );
 
-  function onDrop(toStage: Stage) {
+  function onDrop(toStage: PipelineStage) {
     if (!draggedId) return;
     const account = accounts.find((item) => item.id === draggedId);
-    if (!account || account.stage === toStage) return;
+    if (!account || renderStage(account.stage) === toStage) return;
     setPendingMove({ accountId: draggedId, toStage });
     setMoveNote("");
     setNoteFrom("");
