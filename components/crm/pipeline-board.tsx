@@ -14,7 +14,7 @@ type Stage =
   | "WON"
   | "LOST";
 
-type PipelineStage = Exclude<Stage, "ENRICHED">;
+type PipelineStage = Exclude<Stage, "ENRICHED" | "ENGAGED">;
 
 type PipelineAccount = {
   id: string;
@@ -33,9 +33,8 @@ type PipelineBoardProps = {
 const STAGES: PipelineStage[] = [
   "TARGET",
   "ENRICHING",
-  "CONTACTED",
   "QUALIFIED",
-  "ENGAGED",
+  "CONTACTED",
   "PROPOSAL",
   "WON",
   "LOST",
@@ -47,8 +46,8 @@ type PendingMove = {
 };
 
 function renderStage(stage: Stage): PipelineStage {
-  // Legacy ENRICHED records should remain visible after removing that lane.
-  if (stage === "ENRICHED") {
+  // Legacy ENRICHED/ENGAGED records should remain visible after removing those lanes.
+  if (stage === "ENRICHED" || stage === "ENGAGED") {
     return "CONTACTED";
   }
   return stage;
