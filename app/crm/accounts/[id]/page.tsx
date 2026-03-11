@@ -121,6 +121,7 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
             tasks={account.tasks.map((task) => ({
               id: task.id,
               type: task.type,
+              title: task.type,
               status: task.status,
               notes: task.notes,
               dueAt: task.dueAt?.toISOString() ?? null,
