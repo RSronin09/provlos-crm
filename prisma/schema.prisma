@@ -104,18 +104,34 @@ enum IssueType {
 }
 
 model Driver {
-  id          String     @id @default(uuid()) @db.Uuid
+  id          String          @id @default(uuid()) @db.Uuid
   name        String
   phone       String?
   email       String?
   vehicleName String?
-  isActive    Boolean    @default(true)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   deliveries  Delivery[]
+  location    DriverLocation?
 
   @@index([isActive])
+}
+
+model DriverLocation {
+  id         String   @id @default(uuid()) @db.Uuid
+  driverId   String   @unique @db.Uuid
+  lat        Float
+  lng        Float
+  accuracy   Float?
+  capturedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  driver     Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId])
+  @@index([capturedAt])
 }
 
 model Delivery {
@@ -144,7 +160,10 @@ model Delivery {
   deliveredAt               DateTime?
   cancelledAt               DateTime?
 
-  // Geo readiness (populated by future geocoding)
+  // Route sequencing
+  stopOrder                 Int?
+
+  // Geo readiness (populated by geocoding on create/update)
   pickupLat                 Float?
   pickupLng                 Float?
   deliveryLat               Float?
@@ -161,6 +180,7 @@ model Delivery {
   @@index([priorityLevel])
   @@index([requestedDeliveryDateTime])
   @@index([deliveredAt])
+  @@index([stopOrder])
 }
 
 model DeliveryIssue {

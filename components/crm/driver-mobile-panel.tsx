@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DeliveryStatus, IssueType } from "@prisma/client";
+import { buildNavLink } from "@/lib/geocoding";
 
 type DeliveryItem = {
   id: string;
   pickupAddress: string;
   deliveryAddress: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
   requestedDeliveryDateTime: string;
   pickupContactName: string | null;
   pickupContactPhone: string | null;
@@ -16,11 +21,13 @@ type DeliveryItem = {
   packageNotes: string | null;
   priorityLevel: string;
   status: DeliveryStatus;
+  stopOrder: number | null;
   customer: { companyName: string } | null;
 };
 
 type DriverMobilePanelProps = {
   driverName: string;
+  driverId: string;
   deliveries: DeliveryItem[];
 };
 
@@ -87,7 +94,107 @@ const STATUS_LABEL: Record<DeliveryStatus, string> = {
   cancelled: "Cancelled",
 };
 
-export function DriverMobilePanel({ driverName, deliveries }: DriverMobilePanelProps) {
+/** Sends driver location to server every 60 s while tab is active */
+function DriverLocationSender({ driverId }: { driverId: string }) {
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [status, setStatus] = useState<"idle" | "ok" | "denied" | "error">("idle");
+
+  const sendLocation = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await fetch(`/api/drivers/${driverId}/location`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+            }),
+          });
+          setStatus("ok");
+        } catch {
+          setStatus("error");
+        }
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) setStatus("denied");
+        else setStatus("error");
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  };
+
+  useEffect(() => {
+    sendLocation();
+    intervalRef.current = setInterval(() => {
+      if (!document.hidden) sendLocation();
+    }, 60_000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverId]);
+
+  if (status === "denied")
+    return (
+      <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+        Location sharing blocked — enable browser location for live tracking.
+      </div>
+    );
+
+  if (status === "ok")
+    return (
+      <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
+        📍 Location sharing active
+      </div>
+    );
+
+  return null;
+}
+
+/** Navigation launch buttons for a given address */
+function NavButtons({
+  label,
+  address,
+  lat,
+  lng,
+}: {
+  label: string;
+  address: string;
+  lat?: number | null;
+  lng?: number | null;
+}) {
+  return (
+    <div className="mt-2">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        Navigate to {label}
+      </p>
+      <div className="flex gap-1.5 flex-wrap">
+        {(
+          [
+            { key: "apple", icon: "🗺️", label: "Apple Maps" },
+            { key: "google", icon: "📍", label: "Google Maps" },
+            { key: "waze", icon: "🚗", label: "Waze" },
+          ] as const
+        ).map((nav) => (
+          <a
+            key={nav.key}
+            href={buildNavLink(nav.key, address, lat, lng)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 active:scale-95"
+          >
+            {nav.icon} {nav.label}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function DriverMobilePanel({ driverName, driverId, deliveries }: DriverMobilePanelProps) {
   const router = useRouter();
   const [openId, setOpenId] = useState<string | null>(
     deliveries.length > 0 ? deliveries[0].id : null
@@ -152,12 +259,15 @@ export function DriverMobilePanel({ driverName, deliveries }: DriverMobilePanelP
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Driver</p>
-        <p className="mt-0.5 text-xl font-bold text-slate-900">{driverName}</p>
-        <p className="text-sm text-slate-500">
-          {activeDeliveries.length} active · {completedDeliveries.length} completed
-        </p>
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm space-y-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Driver</p>
+          <p className="mt-0.5 text-xl font-bold text-slate-900">{driverName}</p>
+          <p className="text-sm text-slate-500">
+            {activeDeliveries.length} active · {completedDeliveries.length} completed
+          </p>
+        </div>
+        <DriverLocationSender driverId={driverId} />
       </div>
 
       {activeDeliveries.length === 0 ? (
@@ -169,6 +279,7 @@ export function DriverMobilePanel({ driverName, deliveries }: DriverMobilePanelP
 
       {activeDeliveries.map((d, idx) => {
         const isOpen = openId === d.id;
+        const stopNum = d.stopOrder ?? idx + 1;
         const availableActions = STATUS_ACTIONS.filter((a) => a.applicableFrom.includes(d.status));
         const fb = feedback[d.id];
         const showIssue = showIssueForm[d.id] ?? false;
@@ -190,7 +301,7 @@ export function DriverMobilePanel({ driverName, deliveries }: DriverMobilePanelP
               onClick={() => setOpenId(isOpen ? null : d.id)}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
-                {idx + 1}
+                {stopNum}
               </span>
               <div className="flex-1 min-w-0">
                 <p className="truncate font-semibold text-slate-900">
@@ -245,6 +356,35 @@ export function DriverMobilePanel({ driverName, deliveries }: DriverMobilePanelP
                   </div>
                 </div>
 
+                {/* Navigation launch buttons */}
+                {(
+                  [
+                    DeliveryStatus.assigned,
+                    DeliveryStatus.pending,
+                    DeliveryStatus.en_route_to_pickup,
+                  ] as DeliveryStatus[]
+                ).includes(d.status) && (
+                  <NavButtons
+                    label="Pickup"
+                    address={d.pickupAddress}
+                    lat={d.pickupLat}
+                    lng={d.pickupLng}
+                  />
+                )}
+                {(
+                  [
+                    DeliveryStatus.picked_up,
+                    DeliveryStatus.en_route_to_delivery,
+                  ] as DeliveryStatus[]
+                ).includes(d.status) && (
+                  <NavButtons
+                    label="Delivery"
+                    address={d.deliveryAddress}
+                    lat={d.deliveryLat}
+                    lng={d.deliveryLng}
+                  />
+                )}
+
                 {d.packageNotes ? (
                   <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
                     <p className="font-bold text-amber-700 mb-0.5">Instructions</p>
@@ -253,7 +393,8 @@ export function DriverMobilePanel({ driverName, deliveries }: DriverMobilePanelP
                 ) : null}
 
                 <p className="text-xs text-slate-400">
-                  Requested by: <strong>{new Date(d.requestedDeliveryDateTime).toLocaleString()}</strong>
+                  Stop {stopNum} · Requested by:{" "}
+                  <strong>{new Date(d.requestedDeliveryDateTime).toLocaleString()}</strong>
                 </p>
 
                 {fb ? (

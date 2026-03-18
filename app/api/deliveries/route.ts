@@ -3,6 +3,7 @@ import { isAdminRequest } from "@/lib/admin";
 import { zodErrorResponse, unauthorizedResponse, parsePositiveInt } from "@/lib/api";
 import { deliveryCreateSchema } from "@/lib/crm-validation";
 import { suggestDriver, TERMINAL_STATUSES } from "@/lib/delivery-queue";
+import { geocodeDeliveryAddresses } from "@/lib/geocoding";
 import { DeliveryStatus, DeliveryPriority, IssueStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
 
@@ -85,10 +86,17 @@ export async function POST(request: NextRequest) {
   const { assignedDriverId, ...rest } = parsed.data;
   const driverId = assignedDriverId ?? (await suggestDriver());
 
+  // Geocode addresses — non-blocking; failure does not abort delivery creation
+  const geoCoords = await geocodeDeliveryAddresses(
+    parsed.data.pickupAddress,
+    parsed.data.deliveryAddress,
+  ).catch(() => ({ pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null }));
+
   const delivery = await db.$transaction(async (tx) => {
     const created = await tx.delivery.create({
       data: {
         ...rest,
+        ...geoCoords,
         assignedDriverId: driverId,
         status: driverId ? "assigned" : "pending",
         ...(driverId ? { assignedAt: new Date() } : {}),

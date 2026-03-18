@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { isAdminRequest } from "@/lib/admin";
 import { zodErrorResponse, unauthorizedResponse, uuidSchema } from "@/lib/api";
 import { deliveryUpdateSchema } from "@/lib/crm-validation";
+import { geocodeDeliveryAddresses } from "@/lib/geocoding";
 import { NextRequest } from "next/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -37,9 +38,26 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const parsed = deliveryUpdateSchema.safeParse(body);
   if (!parsed.success) return zodErrorResponse(parsed.error);
 
+  // Re-geocode only if addresses changed
+  let geoUpdate: Record<string, number | null> = {};
+  if (parsed.data.pickupAddress || parsed.data.deliveryAddress) {
+    const existing = await db.delivery.findUnique({
+      where: { id },
+      select: { pickupAddress: true, deliveryAddress: true },
+    });
+    if (existing) {
+      const pickup = parsed.data.pickupAddress ?? existing.pickupAddress;
+      const delivery_ = parsed.data.deliveryAddress ?? existing.deliveryAddress;
+      const geo = await geocodeDeliveryAddresses(pickup, delivery_).catch(
+        () => ({ pickupLat: null, pickupLng: null, deliveryLat: null, deliveryLng: null }),
+      );
+      geoUpdate = geo;
+    }
+  }
+
   const delivery = await db.delivery.update({
     where: { id },
-    data: parsed.data,
+    data: { ...parsed.data, ...geoUpdate },
     include: {
       customer: { select: { id: true, companyName: true } },
       assignedDriver: { select: { id: true, name: true, phone: true } },

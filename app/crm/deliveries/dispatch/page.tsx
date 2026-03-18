@@ -41,6 +41,7 @@ export default async function DispatchBoardPage() {
     isOverdue: isOverdue(d),
     isAtRisk: isAtRisk(d, 2),
     hasOpenIssue: d.issues.length > 0,
+    stopOrder: d.stopOrder,
     customer: d.customer,
     assignedDriver: d.assignedDriver,
   }));
@@ -64,6 +65,12 @@ export default async function DispatchBoardPage() {
               className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               ← Dashboard
+            </Link>
+            <Link
+              href="/crm/deliveries/live"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              🗺 Live Map
             </Link>
             <Link
               href="/crm/deliveries/create"

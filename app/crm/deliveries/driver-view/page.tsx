@@ -28,7 +28,11 @@ export default async function DriverViewPage({ searchParams }: DriverViewPagePro
     const raw = await db.delivery.findMany({
       where: { assignedDriverId: selectedDriverId },
       include: { customer: { select: { companyName: true } } },
-      orderBy: [{ priorityLevel: "desc" }, { requestedDeliveryDateTime: "asc" }],
+      orderBy: [
+        { stopOrder: "asc" },
+        { priorityLevel: "desc" },
+        { requestedDeliveryDateTime: "asc" },
+      ],
     });
     deliveries = sortDeliveryQueue(raw);
   }
@@ -73,10 +77,15 @@ export default async function DriverViewPage({ searchParams }: DriverViewPagePro
       {selectedDriver ? (
         <DriverMobilePanel
           driverName={selectedDriver.name}
+          driverId={selectedDriver.id}
           deliveries={deliveries.map((d) => ({
             id: d.id,
             pickupAddress: d.pickupAddress,
             deliveryAddress: d.deliveryAddress,
+            pickupLat: d.pickupLat,
+            pickupLng: d.pickupLng,
+            deliveryLat: d.deliveryLat,
+            deliveryLng: d.deliveryLng,
             requestedDeliveryDateTime: d.requestedDeliveryDateTime.toISOString(),
             pickupContactName: d.pickupContactName,
             pickupContactPhone: d.pickupContactPhone,
@@ -85,6 +94,7 @@ export default async function DriverViewPage({ searchParams }: DriverViewPagePro
             packageNotes: d.packageNotes,
             priorityLevel: d.priorityLevel,
             status: d.status,
+            stopOrder: d.stopOrder,
             customer: d.customer,
           }))}
         />

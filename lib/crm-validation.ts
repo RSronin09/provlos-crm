@@ -151,6 +151,20 @@ export const deliveryIssueResolveSchema = z.object({
   status: z.nativeEnum(IssueStatus).optional(),
 });
 
+export const driverLocationSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  accuracy: z.number().optional().nullable(),
+});
+
+export const deliveryStopOrderSchema = z.object({
+  stopOrder: z.number().int().positive().nullable(),
+});
+
+export const resequenceDriverSchema = z.object({
+  driverId: z.string().uuid(),
+});
+
 export const addDiscoveredLeadSchema = z.object({
   companyName: z.string().min(2),
   website: z.string().url().optional().nullable(),
