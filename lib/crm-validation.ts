@@ -1,6 +1,8 @@
 import {
   AccountStage,
   ActivityType,
+  DeliveryPriority,
+  DeliveryStatus,
   LeadCandidateStatus,
   TaskStatus,
   TaskType,
@@ -90,6 +92,45 @@ export const decisionMakerSearchSchema = z.object({
   region: z.string().optional().nullable(),
   refresh: z.boolean().optional(),
   persistToCrm: z.boolean().optional(),
+});
+
+export const driverCreateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  vehicleName: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const driverUpdateSchema = driverCreateSchema.partial();
+
+export const deliveryCreateSchema = z.object({
+  customerId: z.string().uuid().optional().nullable(),
+  pickupDateTime: z.coerce.date().optional().nullable(),
+  requestedDeliveryDateTime: z.coerce.date(),
+  pickupAddress: z.string().min(1),
+  deliveryAddress: z.string().min(1),
+  pickupContactName: z.string().optional().nullable(),
+  pickupContactPhone: z.string().optional().nullable(),
+  deliveryContactName: z.string().optional().nullable(),
+  deliveryContactPhone: z.string().optional().nullable(),
+  packageNotes: z.string().optional().nullable(),
+  priorityLevel: z.nativeEnum(DeliveryPriority).optional(),
+  assignedDriverId: z.string().uuid().optional().nullable(),
+  createdBy: z.string().min(1),
+});
+
+export const deliveryUpdateSchema = deliveryCreateSchema.omit({ createdBy: true }).partial();
+
+export const deliveryStatusUpdateSchema = z.object({
+  status: z.nativeEnum(DeliveryStatus),
+  changedBy: z.string().min(1),
+  note: z.string().optional().nullable(),
+});
+
+export const deliveryAssignSchema = z.object({
+  driverId: z.string().uuid().nullable(),
+  changedBy: z.string().min(1),
 });
 
 export const addDiscoveredLeadSchema = z.object({
