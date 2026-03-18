@@ -13,6 +13,7 @@ const navItems = [
   { href: "/crm/import", label: "Import Targets" },
   { href: "/crm/deliveries", label: "Deliveries", isSection: true },
   { href: "/crm/deliveries", label: "Delivery Dashboard" },
+  { href: "/crm/deliveries/dispatch", label: "Dispatch Board" },
   { href: "/crm/deliveries/all", label: "All Deliveries" },
   { href: "/crm/deliveries/create", label: "Create Delivery" },
   { href: "/crm/deliveries/drivers", label: "Drivers" },

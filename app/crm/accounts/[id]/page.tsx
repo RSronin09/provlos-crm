@@ -1,4 +1,5 @@
 import { AccountDetailActions } from "@/components/crm/account-detail-actions";
+import { AccountDeliveriesCard } from "@/components/crm/account-deliveries-card";
 import { AccountRecordEditableCards } from "@/components/crm/account-record-editable-cards";
 import { AccountRecordHeaderActions } from "@/components/crm/account-record-header-actions";
 import { DetailTabs } from "@/components/crm/ui/detail-tabs";
@@ -178,6 +179,10 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               </a>
             </div>
           </RightRailCard>
+          <AccountDeliveriesCard
+            accountId={account.id}
+            accountName={account.companyName}
+          />
           <AccountDetailActions accountId={account.id} initialNotes={account.notes ?? ""} />
         </div>
       </div>

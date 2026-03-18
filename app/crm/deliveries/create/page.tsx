@@ -4,7 +4,14 @@ import { DeliveryCreateForm } from "@/components/crm/delivery-create-form";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import Link from "next/link";
 
-export default async function CreateDeliveryPage() {
+type CreateDeliveryPageProps = {
+  searchParams?: Promise<{ customerId?: string }>;
+};
+
+export default async function CreateDeliveryPage({ searchParams }: CreateDeliveryPageProps) {
+  const params = (await searchParams) ?? {};
+  const prefilledCustomerId = params.customerId ?? null;
+
   const [accounts, drivers, suggestedDriverId] = await Promise.all([
     db.account.findMany({
       select: { id: true, companyName: true },
@@ -37,6 +44,7 @@ export default async function CreateDeliveryPage() {
         accounts={accounts}
         drivers={drivers}
         suggestedDriverId={suggestedDriverId}
+        prefilledCustomerId={prefilledCustomerId}
       />
     </div>
   );

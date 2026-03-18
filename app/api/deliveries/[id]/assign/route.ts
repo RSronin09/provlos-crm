@@ -35,6 +35,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       data: {
         assignedDriverId: parsed.data.driverId,
         status: newStatus,
+        ...(parsed.data.driverId && newStatus === DeliveryStatus.assigned
+          ? { assignedAt: new Date() }
+          : {}),
       },
       include: {
         assignedDriver: { select: { id: true, name: true } },

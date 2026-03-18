@@ -3,6 +3,7 @@ import { isAdminRequest } from "@/lib/admin";
 import { zodErrorResponse, unauthorizedResponse } from "@/lib/api";
 import { driverCreateSchema } from "@/lib/crm-validation";
 import { NextRequest } from "next/server";
+import { DeliveryStatus } from "@prisma/client";
 
 export async function GET(_request: NextRequest) {
   const drivers = await db.driver.findMany({
@@ -12,7 +13,12 @@ export async function GET(_request: NextRequest) {
           deliveries: {
             where: {
               status: {
-                in: ["assigned", "en_route_to_pickup", "picked_up", "en_route_to_delivery"],
+                in: [
+                  DeliveryStatus.assigned,
+                  DeliveryStatus.en_route_to_pickup,
+                  DeliveryStatus.picked_up,
+                  DeliveryStatus.en_route_to_delivery,
+                ],
               },
             },
           },

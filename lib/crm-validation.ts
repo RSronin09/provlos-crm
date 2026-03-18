@@ -3,6 +3,8 @@ import {
   ActivityType,
   DeliveryPriority,
   DeliveryStatus,
+  IssueType,
+  IssueStatus,
   LeadCandidateStatus,
   TaskStatus,
   TaskType,
@@ -131,6 +133,22 @@ export const deliveryStatusUpdateSchema = z.object({
 export const deliveryAssignSchema = z.object({
   driverId: z.string().uuid().nullable(),
   changedBy: z.string().min(1),
+});
+
+export const deliveryNotesSchema = z.object({
+  dispatcherNotes: z.string(),
+});
+
+export const deliveryIssueCreateSchema = z.object({
+  reportedBy: z.string().min(1),
+  issueType: z.nativeEnum(IssueType),
+  note: z.string().optional().nullable(),
+});
+
+export const deliveryIssueResolveSchema = z.object({
+  resolvedBy: z.string().min(1),
+  resolveNote: z.string().optional().nullable(),
+  status: z.nativeEnum(IssueStatus).optional(),
 });
 
 export const addDiscoveredLeadSchema = z.object({

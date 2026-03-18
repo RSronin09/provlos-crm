@@ -10,18 +10,20 @@ type DeliveryCreateFormProps = {
   accounts: Account[];
   drivers: Driver[];
   suggestedDriverId: string | null;
+  prefilledCustomerId?: string | null;
 };
 
 export function DeliveryCreateForm({
   accounts,
   drivers,
   suggestedDriverId,
+  prefilledCustomerId,
 }: DeliveryCreateFormProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(prefilledCustomerId ?? "");
   const [pickupAddress, setPickupAddress] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [requestedDeliveryDateTime, setRequestedDeliveryDateTime] = useState("");

@@ -89,6 +89,20 @@ enum DeliveryPriority {
   urgent
 }
 
+enum IssueStatus {
+  open
+  resolved
+}
+
+enum IssueType {
+  delayed
+  customer_unavailable
+  pickup_problem
+  address_issue
+  vehicle_problem
+  other
+}
+
 model Driver {
   id          String     @id @default(uuid()) @db.Uuid
   name        String
@@ -105,33 +119,67 @@ model Driver {
 }
 
 model Delivery {
-  id                       String           @id @default(uuid()) @db.Uuid
-  customerId               String?          @db.Uuid
-  pickupDateTime           DateTime?
+  id                        String           @id @default(uuid()) @db.Uuid
+  customerId                String?          @db.Uuid
+  pickupDateTime            DateTime?
   requestedDeliveryDateTime DateTime
-  pickupAddress            String
-  deliveryAddress          String
-  pickupContactName        String?
-  pickupContactPhone       String?
-  deliveryContactName      String?
-  deliveryContactPhone     String?
-  packageNotes             String?
-  priorityLevel            DeliveryPriority @default(standard)
-  status                   DeliveryStatus   @default(pending)
-  assignedDriverId         String?          @db.Uuid
-  createdBy                String
-  createdAt                DateTime         @default(now())
-  updatedAt                DateTime         @updatedAt
+  pickupAddress             String
+  deliveryAddress           String
+  pickupContactName         String?
+  pickupContactPhone        String?
+  deliveryContactName       String?
+  deliveryContactPhone      String?
+  packageNotes              String?
+  dispatcherNotes           String?
+  priorityLevel             DeliveryPriority @default(standard)
+  status                    DeliveryStatus   @default(pending)
+  assignedDriverId          String?          @db.Uuid
+  createdBy                 String
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
 
-  customer                 Account?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  assignedDriver           Driver?          @relation(fields: [assignedDriverId], references: [id], onDelete: SetNull)
-  statusHistory            DeliveryStatusHistory[]
+  // Phase timestamps for operational tracking
+  assignedAt                DateTime?
+  pickedUpAt                DateTime?
+  deliveredAt               DateTime?
+  cancelledAt               DateTime?
+
+  // Geo readiness (populated by future geocoding)
+  pickupLat                 Float?
+  pickupLng                 Float?
+  deliveryLat               Float?
+  deliveryLng               Float?
+
+  customer                  Account?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  assignedDriver            Driver?          @relation(fields: [assignedDriverId], references: [id], onDelete: SetNull)
+  statusHistory             DeliveryStatusHistory[]
+  issues                    DeliveryIssue[]
 
   @@index([status])
   @@index([assignedDriverId])
   @@index([customerId])
   @@index([priorityLevel])
   @@index([requestedDeliveryDateTime])
+  @@index([deliveredAt])
+}
+
+model DeliveryIssue {
+  id          String      @id @default(uuid()) @db.Uuid
+  deliveryId  String      @db.Uuid
+  reportedBy  String
+  issueType   IssueType
+  note        String?
+  status      IssueStatus @default(open)
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  resolveNote String?
+
+  delivery    Delivery    @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model DeliveryStatusHistory {
