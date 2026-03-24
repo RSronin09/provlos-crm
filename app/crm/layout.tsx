@@ -10,7 +10,6 @@ const navItems = [
   { href: "/crm/pipeline", label: "Pipeline" },
   { href: "/crm/tasks", label: "Tasks" },
   { href: "/crm/discovery", label: "Lead Discovery" },
-  { href: "/crm/import", label: "Import Targets" },
   { href: "/crm/deliveries", label: "Deliveries", isSection: true },
   { href: "/crm/deliveries", label: "Delivery Dashboard" },
   { href: "/crm/deliveries/dispatch", label: "Dispatch Board" },
