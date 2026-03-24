@@ -42,9 +42,12 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     return Response.json({ error: "Invalid contact id" }, { status: 400 });
   }
 
-  await db.contact.delete({
-    where: { id },
-  });
+  const existing = await db.contact.findUnique({ where: { id } });
+  if (!existing) {
+    return Response.json({ error: "Contact not found" }, { status: 404 });
+  }
+
+  await db.contact.delete({ where: { id } });
 
   return Response.json({ ok: true });
 }

@@ -20,19 +20,49 @@ export function ContactRecordActions({
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const authHeaders = {
+    "content-type": "application/json",
+    "x-admin-token": adminToken,
+  };
+
   async function post(path: string, body: unknown) {
     const response = await fetch(path, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-admin-token": adminToken,
-      },
+      headers: authHeaders,
       body: JSON.stringify(body),
     });
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
       throw new Error(payload.error ?? "Request failed");
+    }
+  }
+
+  async function deleteContact() {
+    const message =
+      "Delete this contact permanently?\n\n" +
+      "Tasks and activities on the account stay; they will no longer be linked to this person.";
+    if (!window.confirm(message)) return;
+
+    setBusy(true);
+    setStatus(null);
+    try {
+      const response = await fetch(`/api/contacts/${contactId}`, {
+        method: "DELETE",
+        headers: { "x-admin-token": adminToken },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string" ? payload.error : "Failed to delete contact.",
+        );
+      }
+      router.push(`/crm/accounts/${accountId}`);
+      router.refresh();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -128,6 +158,23 @@ export function ContactRecordActions({
           Create Task
         </button>
       </div>
+
+      <div className="border-t border-slate-200 pt-3 mt-1">
+        <button
+          type="button"
+          onClick={() => void deleteContact()}
+          disabled={busy}
+          className={`rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60 ${
+            compact ? "w-full" : ""
+          }`}
+        >
+          Delete contact
+        </button>
+        <p className="mt-1 text-[11px] text-slate-400">
+          Removes this person from the CRM. Account tasks and history remain; contact links are cleared.
+        </p>
+      </div>
+
       {status ? <p className="text-xs text-slate-600">{status}</p> : null}
     </div>
   );
