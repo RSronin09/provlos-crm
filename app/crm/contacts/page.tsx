@@ -59,7 +59,6 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
           "Email",
           "Phone",
           "LinkedIn",
-          "Confidence Score",
           "Source",
           "Last Verified",
         ]}
@@ -91,7 +90,6 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
                 "-"
               )}
             </td>
-            <td className="px-4 py-3">{contact.confidenceScore?.toFixed(2) ?? "-"}</td>
             <td className="px-4 py-3">{contact.source ?? "-"}</td>
             <td className="px-4 py-3">
               {contact.lastVerifiedAt ? contact.lastVerifiedAt.toISOString().slice(0, 10) : "-"}
