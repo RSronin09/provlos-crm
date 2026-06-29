@@ -133,13 +133,14 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-3">
+      {/* On mobile: horizontal snap-scroll; on xl: 3-column grid */}
+      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 md:-mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-3">
         {STAGES.map((stage) => (
           <section
             key={stage}
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => onDrop(stage)}
-            className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
+            className="w-[78vw] flex-shrink-0 snap-start rounded-lg border border-slate-200 bg-white p-3 shadow-sm md:w-auto"
           >
             <div className="mb-3 flex items-center justify-between">
               <StageBadge stage={stage} />
@@ -178,8 +179,10 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
       </div>
 
       {pendingMove ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
+          <div className="w-full rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-lg sm:rounded-lg">
+            {/* Drag handle (mobile) */}
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             <h3 className="text-lg font-semibold">Add note for stage move</h3>
             <p className="mt-1 text-sm text-slate-600">
               A note is required when moving an account to {pendingMove.toStage}.

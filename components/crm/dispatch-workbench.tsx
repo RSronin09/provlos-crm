@@ -93,6 +93,7 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [mobileTab, setMobileTab] = useState<"queue" | "detail" | "drivers">("queue");
   const [resequencingDriver, setResequencingDriver] = useState<string | null>(null);
 
   const selected = queue.find((d) => d.id === selectedId) ?? null;
@@ -199,9 +200,27 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-180px)] min-h-[600px] gap-3 overflow-hidden">
-      {/* LEFT: Queue grouped by status */}
-      <div className="w-64 shrink-0 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="flex flex-col gap-3">
+      {/* Mobile tab strip — hidden on desktop */}
+      <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm lg:hidden">
+        {(["queue", "detail", "drivers"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setMobileTab(tab)}
+            className={`flex-1 rounded-md py-2 text-xs font-medium capitalize transition-colors ${
+              mobileTab === tab ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {tab === "queue" ? `Queue (${queue.length})` : tab === "detail" ? "Detail" : `Drivers (${drivers.length})`}
+          </button>
+        ))}
+      </div>
+
+      {/* Main layout: stacked on mobile, 3-panel on lg+ */}
+      <div className="flex h-[calc(100vh-240px)] min-h-[500px] gap-3 overflow-hidden lg:h-[calc(100vh-180px)]">
+        {/* LEFT: Queue grouped by status */}
+        <div className={`w-full shrink-0 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm lg:w-64 ${mobileTab !== "queue" ? "hidden lg:block" : ""}`}>
         <div className="border-b border-slate-200 px-4 py-3">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Queue ({queue.length})
@@ -223,6 +242,7 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
                       setSelectedId(d.id);
                       setFeedback(null);
                       setNoteText(d.dispatcherNotes ?? "");
+                      setMobileTab("detail");
                     }}
                     className={`w-full rounded-md px-2.5 py-2 text-left transition-colors ${
                       selectedId === d.id
@@ -266,7 +286,7 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
       </div>
 
       {/* MAIN: Selected delivery detail + actions */}
-      <div className="flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={`w-full flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm ${mobileTab !== "detail" ? "hidden lg:block" : ""}`}>
         {!selected ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">
             Select a delivery from the queue.
@@ -475,7 +495,7 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
       </div>
 
       {/* RIGHT: Driver Workload */}
-      <div className="w-52 shrink-0 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className={`w-full shrink-0 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm lg:w-52 ${mobileTab !== "drivers" ? "hidden lg:block" : ""}`}>
         <div className="border-b border-slate-200 px-4 py-3">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Drivers</p>
         </div>
@@ -535,5 +555,6 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
         </div>
       </div>
     </div>
+  </div>
   );
 }

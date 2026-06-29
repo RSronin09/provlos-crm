@@ -215,7 +215,7 @@ export function LiveOperationsPanel({ initialDrivers, initialDeliveries }: Props
       </div>
 
       {/* Map + side panel */}
-      <div className="flex min-h-0 flex-1 gap-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
         {/* Map */}
         <div className="relative min-h-[500px] flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {driverPins.length === 0 && deliveryPins.length === 0 ? (
@@ -248,7 +248,7 @@ export function LiveOperationsPanel({ initialDrivers, initialDeliveries }: Props
         </div>
 
         {/* Info panel */}
-        <div className="w-80 shrink-0 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="w-full shrink-0 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm lg:w-80">
           {selectedDelivery ? (
             <DeliveryInfoCard
               delivery={selectedDelivery}

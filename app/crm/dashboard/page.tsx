@@ -139,7 +139,7 @@ export default async function DashboardPage() {
       />
 
       {/* CRM metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard
           label="Total Relationships"
           value={totalAccounts}
@@ -211,18 +211,17 @@ export default async function DashboardPage() {
 
       {/* Delivery operations summary */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Delivery Operations
           </h2>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
             <Link
               href="/crm/deliveries/dispatch"
               className="text-xs text-blue-700 hover:underline"
             >
               Dispatch Board →
             </Link>
-            <span className="text-xs text-slate-300">·</span>
             <Link
               href="/crm/deliveries/live"
               className="text-xs text-blue-700 hover:underline"
@@ -233,7 +232,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Delivery KPI cards */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
             {
               label: "Active",
@@ -281,7 +280,7 @@ export default async function DashboardPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Recent delivery events */}
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-slate-700">Recent Delivery Activity</h3>
               <Link href="/crm/deliveries" className="text-xs text-blue-700 hover:underline">
                 Full dashboard →
@@ -320,7 +319,7 @@ export default async function DashboardPage() {
 
           {/* Active deliveries in progress */}
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-slate-700">Active Queue</h3>
               <Link
                 href="/crm/deliveries/all?openOnly=true"
