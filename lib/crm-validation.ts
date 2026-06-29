@@ -184,3 +184,28 @@ export const addDiscoveredLeadSchema = z.object({
     }),
   ),
 });
+
+const spreadsheetRowSchema = z.object({
+  companyName: z.string().min(1),
+  website: z.string().optional().nullable(),
+  industry: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  contactName: z.string().optional().nullable(),
+  contactFirstName: z.string().optional().nullable(),
+  contactLastName: z.string().optional().nullable(),
+  contactTitle: z.string().optional().nullable(),
+  contactEmail: z.string().email().optional().nullable(),
+  contactPhone: z.string().optional().nullable(),
+  sourceRowJson: z.record(z.string(), z.unknown()).optional().nullable(),
+});
+
+export const spreadsheetImportSchema = z.object({
+  rows: z.array(spreadsheetRowSchema).min(1).max(500),
+  autoEnrich: z.boolean().optional(),
+});
+
+export type SpreadsheetRow = z.infer<typeof spreadsheetRowSchema>;
