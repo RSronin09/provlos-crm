@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { AccountStage, AccountType, Prisma } from "@prisma/client";
 import Link from "next/link";
+import { BulkEnrichPanel } from "@/components/crm/bulk-enrich-panel";
 import { DataTable } from "@/components/crm/ui/data-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
@@ -91,12 +92,24 @@ export async function RelationshipListPage({
         title={title}
         subtitle={subtitle}
         actions={
-          <Link
-            href="/crm/relationships/new"
-            className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            + Add Relationship
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {accounts.length > 0 && (
+              <BulkEnrichPanel
+                accounts={accounts.map((a) => ({
+                  id: a.id,
+                  companyName: a.companyName,
+                  contactCount: a._count.contacts,
+                }))}
+                entityLabel={typeConfig ? typeConfig.pluralLabel.toLowerCase() : "accounts"}
+              />
+            )}
+            <Link
+              href="/crm/relationships/new"
+              className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              + Add Relationship
+            </Link>
+          </div>
         }
       />
 
