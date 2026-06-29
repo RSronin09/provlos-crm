@@ -25,6 +25,15 @@ enum AccountStage {
   LOST
 }
 
+enum AccountType {
+  CUSTOMER
+  VENDOR
+  BANK
+  SUPPLIER
+  PARTNER
+  OTHER
+}
+
 enum ActivityType {
   EMAIL_SENT
   EMAIL_REPLY
@@ -220,6 +229,7 @@ model DeliveryStatusHistory {
 model Account {
   id               String           @id @default(uuid()) @db.Uuid
   companyName      String
+  accountType      AccountType      @default(CUSTOMER)
   industry         String?
   orgType          String?
   whatTheyMove     String?
@@ -235,6 +245,15 @@ model Account {
   priorityScore    Float?
   notes            String?
   sourceRowJson    Json?
+
+  // Type-specific relationship fields
+  paymentTerms     String?
+  taxId            String?
+  accountNumber    String?
+  creditLimit      Float?
+  contractStart    DateTime?
+  contractEnd      DateTime?
+
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -247,6 +266,7 @@ model Account {
 
   @@index([companyName])
   @@index([stage])
+  @@index([accountType])
   @@index([state])
   @@index([region])
 }

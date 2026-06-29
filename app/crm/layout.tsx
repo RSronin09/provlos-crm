@@ -5,11 +5,21 @@ export const dynamic = "force-dynamic";
 
 const navItems = [
   { href: "/crm/dashboard", label: "Dashboard" },
-  { href: "/crm/accounts", label: "Accounts" },
+  // Relationships section
+  { href: "/crm/relationships", label: "Relationships", isSection: true },
+  { href: "/crm/relationships", label: "All Relationships" },
+  { href: "/crm/relationships/customers", label: "Customers" },
+  { href: "/crm/relationships/vendors", label: "Vendors" },
+  { href: "/crm/relationships/banks", label: "Banks & Lenders" },
+  { href: "/crm/relationships/suppliers", label: "Suppliers" },
+  { href: "/crm/relationships/partners", label: "Partners" },
+  // CRM tools
+  { href: "/crm/contacts", label: "CRM", isSection: true },
   { href: "/crm/contacts", label: "Contacts" },
   { href: "/crm/pipeline", label: "Pipeline" },
   { href: "/crm/tasks", label: "Tasks" },
   { href: "/crm/discovery", label: "Lead Discovery" },
+  // Deliveries section
   { href: "/crm/deliveries", label: "Deliveries", isSection: true },
   { href: "/crm/deliveries", label: "Delivery Dashboard" },
   { href: "/crm/deliveries/dispatch", label: "Dispatch Board" },

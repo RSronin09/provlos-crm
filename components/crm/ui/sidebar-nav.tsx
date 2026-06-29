@@ -19,7 +19,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
             key={`section-${idx}`}
             className="mt-3 mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400"
           >
-            Deliveries
+            {item.label}
           </p>
         ) : (
           <Link

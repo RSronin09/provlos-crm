@@ -2,13 +2,16 @@ import { AccountDetailActions } from "@/components/crm/account-detail-actions";
 import { AccountDeliveriesCard } from "@/components/crm/account-deliveries-card";
 import { AccountRecordEditableCards } from "@/components/crm/account-record-editable-cards";
 import { AccountRecordHeaderActions } from "@/components/crm/account-record-header-actions";
+import { RelationshipTypeFields } from "@/components/crm/relationship-type-fields";
 import { DetailTabs } from "@/components/crm/ui/detail-tabs";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { RecordHeader } from "@/components/crm/ui/record-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { StageBadge } from "@/components/crm/ui/stage-badge";
+import { AccountTypeBadge } from "@/components/crm/ui/account-type-badge";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
 import { db } from "@/lib/db";
+import { getTypeConfig } from "@/lib/account-types";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -54,14 +57,16 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
     notFound();
   }
 
+  const typeConfig = getTypeConfig(account.accountType);
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Account Record"
-        subtitle="CRM profile for company qualification, outreach, and follow-up tracking."
+        title="Relationship Record"
+        subtitle={`${typeConfig.label} profile — contacts, activities, tasks, and relationship details.`}
         actions={
-          <Link href="/crm/accounts" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-            Back to Accounts
+          <Link href="/crm/relationships" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            Back to Relationships
           </Link>
         }
       />
@@ -70,7 +75,8 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
         subtitle={account.industry ?? "No industry specified"}
         badges={
           <>
-            <StageBadge stage={account.stage} />
+            <AccountTypeBadge accountType={account.accountType} />
+            <StageBadge stage={account.stage} accountType={account.accountType} />
             <StatusBadge value={account.priorityScore ? `PRIORITY ${account.priorityScore}` : "PRIORITY N/A"} />
           </>
         }
@@ -132,6 +138,18 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
         </div>
 
         <div className="space-y-4">
+          <RelationshipTypeFields
+            accountId={account.id}
+            accountType={account.accountType}
+            fields={{
+              paymentTerms: account.paymentTerms,
+              taxId: account.taxId,
+              accountNumber: account.accountNumber,
+              creditLimit: account.creditLimit,
+              contractStart: account.contractStart?.toISOString() ?? null,
+              contractEnd: account.contractEnd?.toISOString() ?? null,
+            }}
+          />
           <RightRailCard title="Account Details">
             <ul className="space-y-1 text-sm text-slate-700">
               <li>Phone: {account.phone ?? "-"}</li>
@@ -153,15 +171,20 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
           </RightRailCard>
           <RightRailCard title="Quick Links">
             <div className="flex flex-col gap-2 text-sm">
+              <Link href="/crm/relationships" className="text-blue-700 hover:underline">
+                All Relationships
+              </Link>
               <Link href="/crm/contacts" className="text-blue-700 hover:underline">
                 All Contacts
               </Link>
               <Link href="/crm/tasks?view=open" className="text-blue-700 hover:underline">
                 Open Tasks
               </Link>
-              <Link href="/crm/pipeline" className="text-blue-700 hover:underline">
-                Pipeline Board
-              </Link>
+              {account.accountType === "CUSTOMER" ? (
+                <Link href="/crm/pipeline" className="text-blue-700 hover:underline">
+                  Pipeline Board
+                </Link>
+              ) : null}
               {account.website ? (
                 <a href={account.website} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
                   Website

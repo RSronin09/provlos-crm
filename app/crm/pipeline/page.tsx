@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 export default async function PipelinePage() {
   const [accounts, latestByAccount] = await Promise.all([
     db.account.findMany({
+      where: { accountType: "CUSTOMER" },
       include: {
         _count: { select: { contacts: true } },
       },
@@ -33,8 +34,8 @@ export default async function PipelinePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Pipeline"
-        subtitle="Drag and drop accounts across stages. Every move requires a note."
+        title="Sales Pipeline"
+        subtitle="Customer accounts by stage. Drag to move — each move requires a note."
       />
       <PipelineBoard accounts={cards} />
     </div>
