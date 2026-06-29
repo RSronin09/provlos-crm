@@ -2,7 +2,7 @@ import { parsePositiveInt, unauthorizedResponse, zodErrorResponse } from "@/lib/
 import { isAdminRequest } from "@/lib/admin";
 import { accountCreateSchema } from "@/lib/crm-validation";
 import { db } from "@/lib/db";
-import { AccountStage, Prisma } from "@prisma/client";
+import { AccountStage, AccountType, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ const accountFilterSchema = z.object({
   search: z.string().optional(),
   industry: z.string().optional(),
   stage: z.nativeEnum(AccountStage).optional(),
+  accountType: z.nativeEnum(AccountType).optional(),
   state: z.string().optional(),
   region: z.string().optional(),
 });
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
     search: params.get("search") ?? undefined,
     industry: params.get("industry") ?? undefined,
     stage: params.get("stage") ?? undefined,
+    accountType: params.get("accountType") ?? undefined,
     state: params.get("state") ?? undefined,
     region: params.get("region") ?? undefined,
   });
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest) {
     return zodErrorResponse(parsed.error);
   }
 
-  const { search, stage, state, industry, region } = parsed.data;
+  const { search, stage, state, industry, region, accountType } = parsed.data;
   const where = {
     ...(search
       ? {
@@ -43,6 +45,7 @@ export async function GET(request: NextRequest) {
       : {}),
     ...(industry ? { industry: { equals: industry, mode: "insensitive" as const } } : {}),
     ...(stage ? { stage } : {}),
+    ...(accountType ? { accountType } : {}),
     ...(state ? { state: { equals: state, mode: "insensitive" as const } } : {}),
     ...(region ? { region: { equals: region, mode: "insensitive" as const } } : {}),
   };

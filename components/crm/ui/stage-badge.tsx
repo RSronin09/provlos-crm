@@ -1,5 +1,8 @@
+import { getStageLabelForType } from "@/lib/account-types";
+
 type StageBadgeProps = {
   stage: string;
+  accountType?: string | null;
 };
 
 const stageColorMap: Record<string, string> = {
@@ -14,7 +17,8 @@ const stageColorMap: Record<string, string> = {
   LOST: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-export function StageBadge({ stage }: StageBadgeProps) {
+export function StageBadge({ stage, accountType }: StageBadgeProps) {
   const cls = stageColorMap[stage] ?? "bg-slate-100 text-slate-700 border-slate-200";
-  return <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>{stage}</span>;
+  const label = getStageLabelForType(stage, accountType);
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }

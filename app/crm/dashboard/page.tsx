@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/crm/ui/page-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { db } from "@/lib/db";
 import { TERMINAL_STATUSES, OPEN_STATUSES } from "@/lib/delivery-queue";
+import { ACCOUNT_TYPE_CONFIG } from "@/lib/account-types";
 import { IssueStatus, DeliveryStatus } from "@prisma/client";
 import Link from "next/link";
 
@@ -38,6 +39,7 @@ export default async function DashboardPage() {
     contactsFound,
     openTasks,
     accountsByStage,
+    accountsByType,
     recentActivities,
     upcomingTasks,
     highPriorityTargets,
@@ -54,6 +56,7 @@ export default async function DashboardPage() {
     db.contact.count(),
     db.task.count({ where: { status: "OPEN" } }),
     db.account.groupBy({ by: ["stage"], _count: { stage: true } }),
+    db.account.groupBy({ by: ["accountType"], _count: { accountType: true } }),
     db.activity.findMany({
       take: 8,
       orderBy: { occurredAt: "desc" },
@@ -132,22 +135,22 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Dashboard"
-        subtitle="Operational snapshot across prospecting, discovery, and outreach."
+        subtitle="Operational snapshot across relationships, discovery, and deliveries."
       />
 
       {/* CRM metrics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          label="Total Accounts"
+          label="Total Relationships"
           value={totalAccounts}
           footer={
-            <Link href="/crm/accounts" className="text-xs text-blue-700 hover:underline">
-              Open accounts
+            <Link href="/crm/relationships" className="text-xs text-blue-700 hover:underline">
+              All relationships
             </Link>
           }
         />
         <MetricCard
-          label="Contacts Found"
+          label="Contacts"
           value={contactsFound}
           footer={
             <Link href="/crm/contacts" className="text-xs text-blue-700 hover:underline">
@@ -165,7 +168,7 @@ export default async function DashboardPage() {
           }
         />
         <MetricCard
-          label="Accounts by Stage"
+          label="Pipeline Stages"
           value={accountsByStage.length}
           hint="Distinct populated stages"
           footer={
@@ -174,6 +177,36 @@ export default async function DashboardPage() {
             </Link>
           }
         />
+      </div>
+
+      {/* Relationship type breakdown */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-700">Relationships by Type</h3>
+          <Link href="/crm/relationships" className="text-xs text-blue-700 hover:underline">
+            Manage →
+          </Link>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {accountsByType.map((row) => {
+            const cfg = ACCOUNT_TYPE_CONFIG[row.accountType as keyof typeof ACCOUNT_TYPE_CONFIG];
+            if (!cfg) return null;
+            const slug = { CUSTOMER: "customers", VENDOR: "vendors", BANK: "banks", SUPPLIER: "suppliers", PARTNER: "partners", OTHER: "other" }[row.accountType] ?? "relationships";
+            return (
+              <Link
+                key={row.accountType}
+                href={`/crm/relationships/${slug}`}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${cfg.badgeClass} hover:opacity-80 transition-opacity`}
+              >
+                {cfg.pluralLabel}
+                <span className="font-bold">{row._count.accountType}</span>
+              </Link>
+            );
+          })}
+          {accountsByType.length === 0 ? (
+            <p className="text-sm text-slate-400">No relationships yet.</p>
+          ) : null}
+        </div>
       </div>
 
       {/* Delivery operations summary */}
@@ -342,11 +375,11 @@ export default async function DashboardPage() {
         cards={[
           {
             id: "accounts-by-stage",
-            label: "Accounts by Stage",
-            value: totalAccounts,
+            label: "Customer Pipeline by Stage",
+            value: accountsByStage.length,
             items: accountsByStage.map((row) => ({
               title: row.stage,
-              subtitle: `${row._count.stage} accounts`,
+              subtitle: `${row._count.stage} records`,
               badge: row.stage,
             })),
             emptyMessage: "No staged accounts yet.",

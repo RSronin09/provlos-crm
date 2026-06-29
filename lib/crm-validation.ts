@@ -1,5 +1,6 @@
 import {
   AccountStage,
+  AccountType,
   ActivityType,
   DeliveryPriority,
   DeliveryStatus,
@@ -14,6 +15,7 @@ import { z } from "zod";
 
 export const accountCreateSchema = z.object({
   companyName: z.string().min(1),
+  accountType: z.nativeEnum(AccountType).optional(),
   industry: z.string().optional().nullable(),
   orgType: z.string().optional().nullable(),
   whatTheyMove: z.string().optional().nullable(),
@@ -29,6 +31,13 @@ export const accountCreateSchema = z.object({
   priorityScore: z.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   sourceRowJson: z.custom<Prisma.InputJsonValue>().optional().nullable(),
+  // Relationship-type-specific fields
+  paymentTerms: z.string().optional().nullable(),
+  taxId: z.string().optional().nullable(),
+  accountNumber: z.string().optional().nullable(),
+  creditLimit: z.number().optional().nullable(),
+  contractStart: z.coerce.date().optional().nullable(),
+  contractEnd: z.coerce.date().optional().nullable(),
 });
 
 export const accountUpdateSchema = accountCreateSchema.partial();
