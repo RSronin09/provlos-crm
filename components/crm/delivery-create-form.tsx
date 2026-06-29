@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type Account = { id: string; companyName: string };
@@ -268,12 +269,12 @@ export function DeliveryCreateForm({
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        <a
+        <Link
           href="/crm/deliveries/all"
           className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           Cancel
-        </a>
+        </Link>
         <button
           type="submit"
           disabled={busy}

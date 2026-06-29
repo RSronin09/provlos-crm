@@ -63,7 +63,26 @@ npm run prisma:deploy
 
 ## Deploy Notes
 
-- Set `DATABASE_URL` and `ADMIN_TOKEN` in Vercel Project Settings.
+### Vercel (recommended)
+
+1. In Vercel Project Settings → **Environment Variables**, add:
+   - `DATABASE_URL` — your Neon Postgres connection string (include `?sslmode=require`, e.g. `postgresql://user:pass@host/db?sslmode=require`)
+   - `ADMIN_TOKEN` — a strong secret used for write operations (sent via `x-admin-token` header)
+   - `SERPER_API_KEY` — (optional) for live web search in lead discovery
+   - `HUNTER_API_KEY` — (optional) for domain email discovery
+
+2. In Vercel Project Settings → **Build & Development Settings**, set the **Build Command** to:
+   ```
+   npm run vercel-build
+   ```
+   This runs `prisma migrate deploy && next build` so migrations are applied on every deploy.
+
+3. Deploy. The `vercel-build` script runs migrations against the production database before each build.
+
+> **Troubleshooting "Application error"**: If you see this on Vercel, the two most common causes are:
+> - `DATABASE_URL` is not set → add it in Vercel env vars
+> - Migrations have not been applied → set Build Command to `npm run vercel-build` and redeploy
+
 - The Prisma datasource is configured to use only `env("DATABASE_URL")`; no localhost override should be used.
 - Health check endpoint: `GET /api/health`.
 
