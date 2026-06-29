@@ -218,10 +218,10 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
             className="rounded-md bg-blue-700 px-3 py-2 text-sm font-medium text-white">
             Apply
           </button>
-          <a href="/crm/deliveries/all"
+          <Link href="/crm/deliveries/all"
             className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
             Clear
-          </a>
+          </Link>
         </div>
       </FilterBar>
 

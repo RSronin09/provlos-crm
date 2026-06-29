@@ -29,7 +29,26 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const candidates = buildLeadCandidates(queued.query, queued.state, queued.region);
+    const candidates = await buildLeadCandidates(queued.query, queued.state, queued.region);
+
+    if (candidates.length === 0) {
+      await db.leadDiscoveryJob.update({
+        where: { id: queued.id },
+        data: {
+          status: "DONE",
+          finishedAt: new Date(),
+          resultCount: 0,
+          lastError: process.env.SERPER_API_KEY
+            ? "No matching companies found for this query."
+            : "SERPER_API_KEY not configured. Set it in environment variables to enable web search.",
+        },
+      });
+      return Response.json({
+        message: process.env.SERPER_API_KEY
+          ? "No matching companies found for this query."
+          : "SERPER_API_KEY not configured.",
+      });
+    }
     let createdCount = 0;
 
     for (const candidate of candidates) {

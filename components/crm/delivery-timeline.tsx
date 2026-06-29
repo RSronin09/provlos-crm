@@ -93,7 +93,7 @@ export function DeliveryTimeline({ history, phases }: DeliveryTimelineProps) {
                 </div>
                 <p className="text-xs text-slate-400">{fmt(h.changedAt)}</p>
                 {h.note ? (
-                  <p className="mt-0.5 text-xs italic text-slate-500">"{h.note}"</p>
+                  <p className="mt-0.5 text-xs italic text-slate-500">&quot;{h.note}&quot;</p>
                 ) : null}
               </div>
             </li>

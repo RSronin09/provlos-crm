@@ -92,6 +92,7 @@ export const decisionMakerSearchSchema = z.object({
   website: z.string().url().optional().nullable(),
   state: z.string().optional().nullable(),
   region: z.string().optional().nullable(),
+  industry: z.string().optional().nullable(),
   refresh: z.boolean().optional(),
   persistToCrm: z.boolean().optional(),
 });
@@ -179,6 +180,7 @@ export const addDiscoveredLeadSchema = z.object({
       department: z.string().optional().nullable(),
       email: z.string().email().optional().nullable(),
       phone: z.string().optional().nullable(),
+      linkedinUrl: z.string().url().optional().nullable(),
       confidenceScore: z.number().optional().nullable(),
       source: z.string().optional().nullable(),
     }),
