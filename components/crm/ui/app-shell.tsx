@@ -24,41 +24,42 @@ export function AppShell({ navItems, children }: AppShellProps) {
   }, [drawerOpen]);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    // overflow-x-clip stops the closed drawer from creating a horizontal scroll bar on iOS
+    <div className="min-h-screen overflow-x-clip bg-slate-100 text-slate-900">
       {/* ── Top bar (sticky, full-width) ── */}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-[1400px] items-center justify-between px-4 md:px-6">
-          <div className="flex items-center gap-3">
-            {/* Hamburger — mobile only */}
-            <button
-              type="button"
-              aria-label="Open navigation"
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100 active:bg-slate-200 md:hidden"
-              onClick={() => setDrawerOpen(true)}
+        <div className="flex h-14 items-center gap-3 px-4">
+          {/* Hamburger — mobile only */}
+          <button
+            type="button"
+            aria-label="Open navigation"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100 active:bg-slate-200 md:hidden"
+            onClick={() => setDrawerOpen(true)}
+          >
+            <svg
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <svg
-                width="20"
-                height="20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path d="M3 6h18M3 12h18M3 18h18" />
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-slate-900">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-900">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="white" aria-hidden="true">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span className="text-sm font-semibold tracking-wide text-slate-800">ProvLOS CRM</span>
             </div>
+            <span className="text-sm font-semibold tracking-wide text-slate-800">ProvLOS CRM</span>
           </div>
-          <div className="hidden text-xs text-slate-500 md:block">Prospecting Workspace</div>
+
+          <div className="ml-auto hidden text-xs text-slate-500 md:block">Prospecting Workspace</div>
         </div>
       </header>
 
@@ -73,7 +74,7 @@ export function AppShell({ navItems, children }: AppShellProps) {
 
       {/* ── Mobile drawer (slides in from the left) ── */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-200 md:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white shadow-2xl transition-transform duration-200 md:hidden ${
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -113,15 +114,20 @@ export function AppShell({ navItems, children }: AppShellProps) {
         </div>
       </div>
 
-      {/* ── Main layout (sidebar + content) ── */}
-      <div className="mx-auto grid max-w-[1400px] gap-6 p-4 md:grid-cols-[240px_1fr] md:p-6">
+      {/* ── Main layout ── */}
+      {/*
+        On mobile: single column, p-4 padding, no column gap.
+        On md+: 240px sidebar + 1fr content, p-6, col-gap-6.
+        max-w-[1400px] is only applied on md+ to avoid centering artifacts on narrow viewports.
+      */}
+      <div className="p-4 md:mx-auto md:grid md:max-w-[1400px] md:grid-cols-[240px_1fr] md:gap-6 md:p-6">
         {/* Desktop sidebar — hidden on mobile */}
         <aside className="hidden self-start rounded-lg border border-slate-200 bg-white p-3 shadow-sm md:block md:sticky md:top-[4.5rem]">
           <SidebarNav items={navItems} />
         </aside>
 
-        {/* Main content — min-w-0 prevents grid blowout on small content */}
-        <main className="min-w-0 space-y-6 pb-safe">{children}</main>
+        {/* Main content */}
+        <main className="min-w-0 max-w-full space-y-5 pb-safe">{children}</main>
       </div>
     </div>
   );

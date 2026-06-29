@@ -119,7 +119,7 @@ export default async function DeliveryDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         {/* Left: Dispatch Queue */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-slate-900">Dispatch Queue</h2>
             <Link href="/crm/deliveries/all?openOnly=true" className="text-sm text-blue-700 hover:underline">
               View all open
@@ -184,7 +184,7 @@ export default async function DeliveryDashboardPage() {
 
         {/* Right: Driver Workload + Activity Feed */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-semibold text-slate-900">Driver Workload</h2>
             <Link href="/crm/deliveries/drivers" className="text-sm text-blue-700 hover:underline">
               Manage
