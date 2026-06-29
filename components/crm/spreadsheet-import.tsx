@@ -84,7 +84,9 @@ type ImportResult = {
   created: number;
   skipped: number;
   contactsCreated: number;
-  enrichmentJobsCreated: number;
+  enrichedAccounts: number;
+  enrichedContacts: number;
+  cappedAt: number | null;
   errors: { row: number; error: string }[];
 };
 
@@ -382,7 +384,7 @@ export function SpreadsheetImport() {
                 Auto-enrich leads after import
               </span>
               <span className="block text-xs text-slate-500 mt-0.5">
-                Creates discovery jobs to look up decision-maker contacts for each imported company using Serper and Hunter.io.
+                Looks up decision-maker contacts for each imported company live via Serper and Hunter.io (up to 20 companies). Takes ~30–60 s for large batches.
               </span>
             </span>
           </label>
@@ -393,7 +395,11 @@ export function SpreadsheetImport() {
               disabled={importing || !hasMapping || !adminToken}
               className="flex-1 sm:flex-none rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {importing ? "Importing…" : `Import ${rows.length} Row${rows.length !== 1 ? "s" : ""}`}
+              {importing
+                ? autoEnrich
+                  ? "Importing & enriching…"
+                  : "Importing…"
+                : `Import ${rows.length} Row${rows.length !== 1 ? "s" : ""}`}
             </button>
             <button
               onClick={() => {
@@ -428,12 +434,17 @@ export function SpreadsheetImport() {
             <h3 className="text-sm font-semibold text-green-800">Import Complete</h3>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
               { label: "Accounts created", value: result.created },
               { label: "Already existed", value: result.skipped },
-              { label: "Contacts added", value: result.contactsCreated },
-              { label: "Enrichment jobs", value: result.enrichmentJobsCreated },
+              { label: "Contacts from sheet", value: result.contactsCreated },
+              ...(result.enrichedAccounts > 0
+                ? [
+                    { label: "Companies enriched", value: result.enrichedAccounts },
+                    { label: "Decision makers found", value: result.enrichedContacts },
+                  ]
+                : []),
             ].map(({ label, value }) => (
               <div key={label} className="rounded-lg bg-white border border-green-100 p-3 text-center">
                 <p className="text-2xl font-bold text-green-700">{value}</p>
@@ -441,6 +452,18 @@ export function SpreadsheetImport() {
               </div>
             ))}
           </div>
+
+          {result.cappedAt && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              Enrichment was limited to the first {result.cappedAt} companies. Open each account and use the &ldquo;Enrich&rdquo; button to look up decision makers for the rest.
+            </p>
+          )}
+
+          {result.enrichedAccounts === 0 && autoEnrich && (
+            <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg px-3 py-2">
+              No decision makers were found during enrichment. This usually means the SERPER_API_KEY or HUNTER_API_KEY environment variables are not set on the server. You can still add contacts manually from each account page.
+            </p>
+          )}
 
           {result.errors.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -471,7 +494,8 @@ export function SpreadsheetImport() {
             <a href="/crm/pipeline" className="underline hover:text-green-900">
               Pipeline
             </a>{" "}
-            to see your imported leads.
+            to see your imported leads. Each account has an{" "}
+            <strong>Enrich</strong> button to fetch decision makers on demand.
           </p>
         </div>
       )}

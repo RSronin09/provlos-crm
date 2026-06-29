@@ -2,6 +2,7 @@ import { AccountDetailActions } from "@/components/crm/account-detail-actions";
 import { AccountDeliveriesCard } from "@/components/crm/account-deliveries-card";
 import { AccountRecordEditableCards } from "@/components/crm/account-record-editable-cards";
 import { AccountRecordHeaderActions } from "@/components/crm/account-record-header-actions";
+import { EnrichButton } from "@/components/crm/enrich-button";
 import { RelationshipTypeFields } from "@/components/crm/relationship-type-fields";
 import { DetailTabs } from "@/components/crm/ui/detail-tabs";
 import { PageHeader } from "@/components/crm/ui/page-header";
@@ -157,6 +158,9 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               <li>State: {account.state ?? "-"}</li>
               <li>Region: {account.region ?? "-"}</li>
             </ul>
+          </RightRailCard>
+          <RightRailCard title="Find Decision Makers">
+            <EnrichButton accountId={account.id} />
           </RightRailCard>
           <RightRailCard title="Contact Summary">
             <p className="text-sm text-slate-700">{account.contacts.length} contacts in this account.</p>
