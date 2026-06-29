@@ -228,6 +228,183 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
   return contacts;
 }
 
+// ---------------------------------------------------------------------------
+// Apollo.io — two-step: search (free) then enrich (1 credit each)
+// ---------------------------------------------------------------------------
+
+// Titles we target for decision-maker discovery
+const APOLLO_TARGET_TITLES = [
+  "VP Operations",
+  "Vice President Operations",
+  "Director of Operations",
+  "Director of Logistics",
+  "Director of Supply Chain",
+  "Head of Operations",
+  "Head of Logistics",
+  "Chief Operating Officer",
+  "COO",
+  "Operations Manager",
+  "Logistics Manager",
+  "Supply Chain Manager",
+  "Fleet Manager",
+  "Transportation Manager",
+  "Procurement Manager",
+];
+
+type ApolloSearchPerson = {
+  id: string;
+  first_name: string;
+  last_name_obfuscated?: string;
+  title?: string;
+  has_email?: boolean;
+  has_direct_phone?: string;
+  linkedin_url?: string;
+  organization?: { name?: string };
+};
+
+type ApolloEnrichedPerson = {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  title?: string;
+  email?: string;
+  email_status?: string;
+  phone_numbers?: { raw_number: string; type?: string }[];
+  linkedin_url?: string;
+  organization?: { name?: string; website_url?: string };
+};
+
+async function searchPeopleFromApollo(
+  companyName: string,
+  domain: string | null,
+): Promise<ApolloSearchPerson[]> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const body: Record<string, unknown> = {
+      q_organization_name: companyName,
+      person_titles: APOLLO_TARGET_TITLES,
+      per_page: 10,
+      page: 1,
+    };
+    if (domain) body.q_organization_domains = [domain];
+
+    const response = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apiKey,
+        "Cache-Control": "no-cache",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) return [];
+
+    const payload = (await response.json()) as { people?: ApolloSearchPerson[] };
+    return payload.people ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function enrichPersonFromApollo(apolloId: string): Promise<ApolloEnrichedPerson | null> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const response = await fetch("https://api.apollo.io/api/v1/people/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apiKey,
+        "Cache-Control": "no-cache",
+      },
+      body: JSON.stringify({
+        id: apolloId,
+        reveal_personal_emails: false,
+        reveal_phone_number: true,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { person?: ApolloEnrichedPerson };
+    return payload.person ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Max contacts to enrich per company — each costs 1 Apollo credit
+const APOLLO_MAX_ENRICH = 5;
+
+async function searchDecisionMakersFromApollo(
+  companyName: string,
+  domain: string | null,
+): Promise<DecisionMakerContact[]> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return [];
+
+  // Step 1: search (free, no credits)
+  const people = await searchPeopleFromApollo(companyName, domain);
+  if (!people.length) return [];
+
+  // Step 2: enrich only people who have an email on file (saves credits)
+  const enrichable = people.filter((p) => p.has_email).slice(0, APOLLO_MAX_ENRICH);
+
+  // If none have emails, still return basic info from search results
+  if (!enrichable.length) {
+    return people.slice(0, APOLLO_MAX_ENRICH).map((p) => ({
+      firstName: p.first_name,
+      lastName: null,
+      fullName: p.first_name,
+      title: p.title ?? null,
+      department: titleToDepartment(p.title ?? null),
+      email: null,
+      phone: null,
+      linkedinUrl: p.linkedin_url ?? null,
+      confidenceScore: 0.60,
+      source: "apollo_search",
+    }));
+  }
+
+  // Enrich sequentially (Apollo recommends sequential for stability)
+  const enriched: DecisionMakerContact[] = [];
+
+  for (const person of enrichable) {
+    const full = await enrichPersonFromApollo(person.id);
+    if (!full) continue;
+
+    const fullName = full.name || [full.first_name, full.last_name].filter(Boolean).join(" ");
+    if (!fullName) continue;
+
+    const primaryPhone =
+      full.phone_numbers?.find((p) => p.type === "work_direct")?.raw_number ??
+      full.phone_numbers?.[0]?.raw_number ??
+      null;
+
+    enriched.push({
+      firstName: full.first_name ?? person.first_name,
+      lastName: full.last_name ?? null,
+      fullName,
+      title: full.title ?? person.title ?? null,
+      department: titleToDepartment(full.title ?? person.title ?? null),
+      email: full.email ?? null,
+      phone: primaryPhone,
+      linkedinUrl: full.linkedin_url ?? person.linkedin_url ?? null,
+      confidenceScore: full.email ? 0.95 : 0.70,
+      source: full.email ? "apollo_enriched" : "apollo_search",
+    });
+  }
+
+  return enriched;
+}
+
 type HunterEmail = {
   value: string;
   first_name: string | null;
@@ -274,32 +451,63 @@ export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOu
   const resolvedWebsite = await resolveWebsite(input.companyName, input.website);
   const domain = parseDomain(resolvedWebsite) || `${slugify(input.companyName)}.com`;
 
-  const [hunterContacts, serperContacts] = await Promise.all([
+  // Run all three providers in parallel. Apollo is the primary source for
+  // email + phone; Hunter fills domain-level emails; Serper adds LinkedIn names.
+  const [apolloContacts, hunterContacts, serperContacts] = await Promise.all([
+    searchDecisionMakersFromApollo(input.companyName, domain),
     searchContactsFromHunter(domain),
     searchDecisionMakersFromSerper(input.companyName, domain),
   ]);
 
+  if (apolloContacts.length) providersUsed.push("apollo");
   if (hunterContacts.length) providersUsed.push("hunter");
   if (serperContacts.length) providersUsed.push("serper");
 
+  // Build lookup maps for merging
+  const apolloByName = new Map(
+    apolloContacts.map((c) => [c.fullName.toLowerCase(), c]),
+  );
   const serperByName = new Map(
-    serperContacts.map((contact) => [contact.fullName.toLowerCase(), contact]),
+    serperContacts.map((c) => [c.fullName.toLowerCase(), c]),
   );
 
-  const mergedFromHunter = hunterContacts.map((contact) => {
-    const byName = serperByName.get(contact.fullName.toLowerCase());
+  // Enrich Hunter contacts with Apollo/Serper data where names overlap
+  const enrichedHunter = hunterContacts.map((contact) => {
+    const apolloMatch = apolloByName.get(contact.fullName.toLowerCase());
+    const serperMatch = serperByName.get(contact.fullName.toLowerCase());
     return {
       ...contact,
-      phone: contact.phone || byName?.phone || null,
-      title: contact.title || byName?.title || null,
-      department: contact.department || byName?.department || null,
-      linkedinUrl: contact.linkedinUrl || byName?.linkedinUrl || null,
-      confidenceScore: Math.max(contact.confidenceScore, byName?.confidenceScore || 0),
-      source: byName ? "hunter+serper" : contact.source,
+      phone: contact.phone || apolloMatch?.phone || null,
+      title: contact.title || apolloMatch?.title || serperMatch?.title || null,
+      department: contact.department || apolloMatch?.department || serperMatch?.department || null,
+      linkedinUrl: contact.linkedinUrl || apolloMatch?.linkedinUrl || serperMatch?.linkedinUrl || null,
+      confidenceScore: Math.max(
+        contact.confidenceScore,
+        apolloMatch?.confidenceScore ?? 0,
+        serperMatch?.confidenceScore ?? 0,
+      ),
+      source: apolloMatch ? "apollo+hunter" : (serperMatch ? "hunter+serper" : contact.source),
     };
   });
 
-  const merged = toUniqueContacts([...mergedFromHunter, ...serperContacts]).slice(0, 10);
+  // Apollo contacts not already in Hunter (by email or name)
+  const hunterEmails = new Set(enrichedHunter.map((c) => c.email?.toLowerCase()).filter(Boolean));
+  const hunterNames = new Set(enrichedHunter.map((c) => c.fullName.toLowerCase()));
+  const apolloOnly = apolloContacts.filter(
+    (c) =>
+      !(c.email && hunterEmails.has(c.email.toLowerCase())) &&
+      !hunterNames.has(c.fullName.toLowerCase()),
+  );
+
+  // Serper contacts not already covered
+  const allNames = new Set([
+    ...enrichedHunter.map((c) => c.fullName.toLowerCase()),
+    ...apolloOnly.map((c) => c.fullName.toLowerCase()),
+  ]);
+  const serperOnly = serperContacts.filter((c) => !allNames.has(c.fullName.toLowerCase()));
+
+  // Apollo first (highest confidence), then Hunter, then Serper
+  const merged = toUniqueContacts([...apolloOnly, ...enrichedHunter, ...serperOnly]).slice(0, 10);
 
   return {
     resolvedWebsite: resolvedWebsite ?? `https://${domain}`,

@@ -34,9 +34,15 @@ function confidenceBadge(score: number | null) {
 }
 
 function sourceBadge(source: string) {
-  const label = source === "existing" ? "Cached" : source.replace("_", " ");
+  const label =
+    source === "existing" ? "Cached" :
+    source === "apollo_enriched" ? "Apollo ✓" :
+    source === "apollo_search" ? "Apollo" :
+    source === "apollo+hunter" ? "Apollo + Hunter" :
+    source.replace(/_/g, " ");
   const color =
     source === "existing" ? "bg-amber-100 text-amber-700" :
+    source.includes("apollo") ? "bg-blue-100 text-blue-700" :
     source.includes("hunter") ? "bg-violet-100 text-violet-700" :
     source.includes("serper") ? "bg-cyan-100 text-cyan-700" :
     "bg-slate-100 text-slate-600";
