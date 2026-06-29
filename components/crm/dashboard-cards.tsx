@@ -50,13 +50,15 @@ export function DashboardCards({ cards }: DashboardCardsProps) {
 
       {activeCard ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
           onClick={() => setActiveId(null)}
         >
           <div
-            className="max-h-[80vh] w-full max-w-xl overflow-auto rounded-lg bg-white p-5 shadow-xl"
+            className="max-h-[90vh] w-full overflow-auto rounded-t-2xl bg-white p-5 shadow-xl sm:max-w-xl sm:rounded-lg"
             onClick={(event) => event.stopPropagation()}
           >
+            {/* Drag handle (mobile) */}
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             <div className="mb-3 flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-semibold">{activeCard.label}</h3>
@@ -65,9 +67,12 @@ export function DashboardCards({ cards }: DashboardCardsProps) {
               <button
                 type="button"
                 onClick={() => setActiveId(null)}
-                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50"
+                aria-label="Close"
               >
-                Close
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 

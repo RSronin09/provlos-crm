@@ -114,7 +114,7 @@ export function DeliveryIssuePanel({
                     {ISSUE_TYPE_LABELS[issue.issueType]}
                   </p>
                   {issue.note ? (
-                    <p className="text-xs text-rose-700 italic">"{issue.note}"</p>
+                    <p className="text-xs text-rose-700 italic">&quot;{issue.note}&quot;</p>
                   ) : null}
                   <p className="text-xs text-rose-500">
                     Reported by {issue.reportedBy} at {fmt(issue.createdAt)}
@@ -221,7 +221,7 @@ export function DeliveryIssuePanel({
                   {ISSUE_TYPE_LABELS[issue.issueType]} — resolved by {issue.resolvedBy}
                 </p>
                 {issue.resolveNote ? (
-                  <p className="text-slate-500 italic">"{issue.resolveNote}"</p>
+                  <p className="text-slate-500 italic">&quot;{issue.resolveNote}&quot;</p>
                 ) : null}
               </li>
             ))}

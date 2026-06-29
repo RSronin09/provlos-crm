@@ -23,4 +23,34 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* Prevent horizontal overflow on mobile */
+  overflow-x: hidden;
+}
+
+/* iOS safe-area padding for bottom home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Smooth momentum scrolling on iOS */
+.overflow-x-auto,
+.overflow-y-auto,
+.overflow-y-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent text size adjustment on orientation change (iOS) */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Ensure tap targets have comfortable size */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
 }
