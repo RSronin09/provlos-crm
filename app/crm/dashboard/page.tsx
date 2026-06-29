@@ -43,6 +43,10 @@ export default async function DashboardPage() {
     recentActivities,
     upcomingTasks,
     highPriorityTargets,
+    // Enrichment coverage
+    accountsWithContacts,
+    enrichedContacts,
+    importedContacts,
     // Delivery metrics
     activeDeliveries,
     overdueDeliveries,
@@ -73,6 +77,14 @@ export default async function DashboardPage() {
       orderBy: { priorityScore: "desc" },
       take: 8,
     }),
+    // Accounts that have at least one contact
+    db.account.count({ where: { contacts: { some: {} } } }),
+    // Contacts sourced from live enrichment
+    db.contact.count({
+      where: { source: { in: ["hunter_domain_search", "serper_search", "hunter+serper", "enrichment"] } },
+    }),
+    // Contacts sourced from spreadsheet import
+    db.contact.count({ where: { source: "spreadsheet_import" } }),
     // Active (non-terminal)
     db.delivery.count({ where: { status: { notIn: TERMINAL_STATUSES } } }),
     // Overdue
@@ -208,6 +220,60 @@ export default async function DashboardPage() {
           ) : null}
         </div>
       </div>
+
+      {/* Lead intelligence / enrichment coverage */}
+      {totalAccounts > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Lead Intelligence</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Contact coverage across all relationships</p>
+            </div>
+            <Link href="/crm/relationships/customers" className="text-xs text-blue-700 hover:underline">
+              Enrich →
+            </Link>
+          </div>
+
+          {/* Coverage bar */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+              <span>Account coverage</span>
+              <span className="font-semibold text-slate-700">
+                {accountsWithContacts} / {totalAccounts} accounts have contacts
+                {" "}({Math.round((accountsWithContacts / totalAccounts) * 100)}%)
+              </span>
+            </div>
+            <div className="h-2.5 w-full rounded-full bg-slate-100">
+              <div
+                className="h-2.5 rounded-full bg-blue-500 transition-all"
+                style={{ width: `${Math.round((accountsWithContacts / totalAccounts) * 100)}%` }}
+              />
+            </div>
+            {totalAccounts - accountsWithContacts > 0 && (
+              <p className="text-xs text-amber-600 mt-1.5">
+                {totalAccounts - accountsWithContacts} account{totalAccounts - accountsWithContacts !== 1 ? "s" : ""} still need enrichment.{" "}
+                <Link href="/crm/relationships/customers" className="underline hover:text-amber-800">
+                  Enrich now →
+                </Link>
+              </p>
+            )}
+          </div>
+
+          {/* Contact source breakdown */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Total Contacts", value: contactsFound, color: "text-slate-700" },
+              { label: "From Enrichment", value: enrichedContacts, color: "text-blue-700" },
+              { label: "From Import", value: importedContacts, color: "text-emerald-700" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-lg bg-slate-50 border border-slate-100 p-3 text-center">
+                <p className={`text-2xl font-bold ${color}`}>{value}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Delivery operations summary */}
       <div className="space-y-3">
