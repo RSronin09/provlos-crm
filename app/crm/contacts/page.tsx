@@ -5,6 +5,7 @@ import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
 type ContactsPageProps = {
   searchParams?: {
@@ -16,24 +17,31 @@ type ContactsPageProps = {
 export default async function ContactsPage({ searchParams }: ContactsPageProps) {
   const filters = searchParams ?? {};
 
-  const contacts = await db.contact.findMany({
-    where: {
-      ...(filters.search
-        ? {
-            OR: [
-              { fullName: { contains: filters.search, mode: "insensitive" } },
-              { firstName: { contains: filters.search, mode: "insensitive" } },
-              { lastName: { contains: filters.search, mode: "insensitive" } },
-              { email: { contains: filters.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(filters.accountId ? { accountId: filters.accountId } : {}),
-    },
-    include: { account: true },
-    orderBy: { updatedAt: "desc" },
-    take: 300,
-  });
+  let contacts: Prisma.ContactGetPayload<{ include: { account: true } }>[] = [];
+  let dbWarning: string | null = null;
+
+  try {
+    contacts = await db.contact.findMany({
+      where: {
+        ...(filters.search
+          ? {
+              OR: [
+                { fullName: { contains: filters.search, mode: "insensitive" } },
+                { firstName: { contains: filters.search, mode: "insensitive" } },
+                { lastName: { contains: filters.search, mode: "insensitive" } },
+                { email: { contains: filters.search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+        ...(filters.accountId ? { accountId: filters.accountId } : {}),
+      },
+      include: { account: true },
+      orderBy: { updatedAt: "desc" },
+      take: 300,
+    });
+  } catch {
+    dbWarning = "Database is unreachable. Check DATABASE_URL and run migrations.";
+  }
 
   return (
     <div className="space-y-6">
@@ -98,8 +106,13 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
         ))}
       </DataTable>
 
-      {!contacts.length ? (
+      {!contacts.length && !dbWarning ? (
         <EmptyState title="No contacts yet" description="Use Lead Discovery or add contacts from account records." />
+      ) : null}
+      {dbWarning ? (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {dbWarning}
+        </p>
       ) : null}
     </div>
   );
