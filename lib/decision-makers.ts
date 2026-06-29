@@ -6,6 +6,7 @@ type DecisionMakerContact = {
   department: string | null;
   email: string | null;
   phone: string | null;
+  linkedinUrl: string | null;
   confidenceScore: number;
   source: string;
 };
@@ -48,6 +49,10 @@ function titleToDepartment(title: string | null) {
   if (normalized.includes("supply chain")) return "Supply Chain";
   if (normalized.includes("operations")) return "Operations";
   if (normalized.includes("procurement")) return "Procurement";
+  if (normalized.includes("transport")) return "Transportation";
+  if (normalized.includes("distribution")) return "Distribution";
+  if (normalized.includes("fleet")) return "Fleet";
+  if (normalized.includes("warehouse")) return "Warehouse";
   return null;
 }
 
@@ -58,21 +63,53 @@ function splitName(fullName: string) {
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
 }
 
-function extractNameFromTitle(title: string | undefined) {
+/**
+ * Extracts a person name from a LinkedIn page title.
+ * LinkedIn titles typically look like: "John Smith - Director of Operations | Acme Corp | LinkedIn"
+ * or "John Smith | LinkedIn"
+ */
+function extractNameFromLinkedinTitle(title: string | undefined): string | null {
   if (!title) return null;
-  const base = title.split("|")[0]?.split("-")[0]?.trim();
-  if (!base || base.length < 4) return null;
-  if (base.toLowerCase().includes("linkedin")) return null;
-  return base;
+  // Strip " | LinkedIn" and similar suffixes
+  const cleaned = title.replace(/\s*[|–—-]\s*linkedin.*$/i, "").trim();
+  // Take everything before the first pipe or dash that looks like a title/company separator
+  const namePart = cleaned.split(/\s*[|–—]\s*/)[0]?.trim() ?? cleaned;
+  if (!namePart || namePart.length < 3 || namePart.length > 60) return null;
+  // Sanity: should look like a name (letters, spaces, hyphens, dots only)
+  if (!/^[A-Za-z\s'.,-]+$/.test(namePart)) return null;
+  // Reject generic terms
+  if (/^(linkedin|profile|page|people|director|manager|vp|head|chief|coo|president)$/i.test(namePart)) return null;
+  return namePart;
 }
 
-function extractTitleFromSnippet(snippet: string | undefined) {
+/**
+ * Extracts a job title from a LinkedIn page title.
+ * e.g. "John Smith - Director of Operations | Acme Corp | LinkedIn" → "Director of Operations"
+ */
+function extractTitleFromLinkedinTitle(title: string | undefined): string | null {
+  if (!title) return null;
+  // LinkedIn title structure: "Name - Title | Company | LinkedIn"
+  const dashMatch = title.match(/-\s*([^|–—]+(?:director|vp|vice president|manager|head|chief|coo|coordinator|analyst|specialist|officer|supervisor|lead)[^|–—]*)/i);
+  if (dashMatch?.[1]) return dashMatch[1].trim().replace(/\s+/g, " ");
+  return null;
+}
+
+function extractTitleFromSnippet(snippet: string | undefined): string | null {
   if (!snippet) return null;
-  const match =
-    snippet.match(
-      /\b(?:director|vp|vice president|head|manager|chief|coo|operations|supply chain|logistics)[^.,;]{0,80}/i,
-    ) ?? null;
-  return match ? match[0].trim() : null;
+  const patterns = [
+    /\b((?:chief|vp|vice president|director|head|manager|coordinator|officer|supervisor|lead|analyst|specialist)\s+(?:of\s+)?[^,.;|]{3,60})/i,
+    /\b((?:logistics|supply chain|operations|procurement|transport|distribution|fleet|warehouse)\s+(?:director|manager|head|coordinator|vp|vice president|officer|supervisor|lead)[^,.;|]{0,40})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = snippet.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return null;
+}
+
+function isLinkedinProfileUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return /linkedin\.com\/in\//i.test(url);
 }
 
 function toUniqueContacts(input: DecisionMakerContact[]) {
@@ -97,7 +134,7 @@ async function serperSearch(query: string) {
       "content-type": "application/json",
       "x-api-key": apiKey,
     },
-    body: JSON.stringify({ q: query, num: 8 }),
+    body: JSON.stringify({ q: query, num: 10 }),
     signal: AbortSignal.timeout(8_000),
   });
 
@@ -123,18 +160,32 @@ async function resolveWebsite(companyName: string, providedWebsite?: string | nu
 async function searchDecisionMakersFromSerper(companyName: string, domain: string | null) {
   if (!process.env.SERPER_API_KEY) return [];
 
-  const query = domain
-    ? `site:linkedin.com/in ("${companyName}" OR "${domain}") ("operations manager" OR "director of operations" OR "supply chain" OR "logistics manager" OR "vp operations")`
-    : `"${companyName}" ("operations manager" OR "director of operations" OR "supply chain" OR "logistics manager") linkedin`;
+  // Primary: LinkedIn profile search
+  const linkedinQuery = domain
+    ? `site:linkedin.com/in "${companyName}" (operations OR logistics OR "supply chain" OR procurement OR distribution OR fleet)`
+    : `"${companyName}" (operations manager OR director of operations OR "supply chain" OR logistics manager OR "vp operations") site:linkedin.com/in`;
 
-  const results = await serperSearch(query);
+  // Secondary: general title search
+  const generalQuery = `"${companyName}" (director OR manager OR "vp" OR "head of") (operations OR logistics OR "supply chain" OR distribution)`;
+
+  const [linkedinResults, generalResults] = await Promise.all([
+    serperSearch(linkedinQuery),
+    serperSearch(generalQuery),
+  ]);
+
   const contacts: DecisionMakerContact[] = [];
 
-  for (const result of results.slice(0, 8)) {
-    const fullName = extractNameFromTitle(result.title);
+  for (const result of linkedinResults.slice(0, 10)) {
+    const isLinkedin = isLinkedinProfileUrl(result.link);
+    const fullName = isLinkedin
+      ? extractNameFromLinkedinTitle(result.title)
+      : null;
     if (!fullName) continue;
+
     const { firstName, lastName } = splitName(fullName);
-    const title = extractTitleFromSnippet(result.snippet);
+    const titleFromPageTitle = extractTitleFromLinkedinTitle(result.title);
+    const titleFromSnippet = extractTitleFromSnippet(result.snippet);
+    const title = titleFromPageTitle ?? titleFromSnippet;
 
     contacts.push({
       firstName,
@@ -144,8 +195,33 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
       department: titleToDepartment(title),
       email: null,
       phone: null,
-      confidenceScore: 0.58,
-      source: "serper_search",
+      linkedinUrl: isLinkedin ? (result.link ?? null) : null,
+      confidenceScore: title ? 0.65 : 0.52,
+      source: "serper_linkedin",
+    });
+  }
+
+  // From general results, try to extract names from snippets mentioning specific people
+  for (const result of generalResults.slice(0, 6)) {
+    if (isLinkedinProfileUrl(result.link)) continue; // already handled above
+    const titleFromSnippet = extractTitleFromSnippet(result.snippet);
+    if (!titleFromSnippet) continue;
+
+    // Look for a name pattern near the title in the snippet
+    const nameMatch = result.snippet?.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)\b/);
+    if (!nameMatch?.[1]) continue;
+    const fullName = nameMatch[1];
+
+    contacts.push({
+      ...splitName(fullName),
+      fullName,
+      title: titleFromSnippet,
+      department: titleToDepartment(titleFromSnippet),
+      email: null,
+      phone: null,
+      linkedinUrl: null,
+      confidenceScore: 0.45,
+      source: "serper_web",
     });
   }
 
@@ -158,6 +234,7 @@ type HunterEmail = {
   last_name: string | null;
   position: string | null;
   phone_number: string | null;
+  linkedin: string | null;
 };
 
 async function searchContactsFromHunter(domain: string | null) {
@@ -185,6 +262,7 @@ async function searchContactsFromHunter(domain: string | null) {
       department: titleToDepartment(entry.position),
       email: entry.value,
       phone: entry.phone_number,
+      linkedinUrl: entry.linkedin ?? null,
       confidenceScore: 0.84,
       source: "hunter_domain_search",
     } satisfies DecisionMakerContact;
@@ -215,12 +293,13 @@ export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOu
       phone: contact.phone || byName?.phone || null,
       title: contact.title || byName?.title || null,
       department: contact.department || byName?.department || null,
+      linkedinUrl: contact.linkedinUrl || byName?.linkedinUrl || null,
       confidenceScore: Math.max(contact.confidenceScore, byName?.confidenceScore || 0),
       source: byName ? "hunter+serper" : contact.source,
     };
   });
 
-  const merged = toUniqueContacts([...mergedFromHunter, ...serperContacts]).slice(0, 8);
+  const merged = toUniqueContacts([...mergedFromHunter, ...serperContacts]).slice(0, 10);
 
   return {
     resolvedWebsite: resolvedWebsite ?? `https://${domain}`,
