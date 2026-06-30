@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { AccountStage, AccountType, Prisma } from "@prisma/client";
 import Link from "next/link";
 import { BulkEnrichPanel } from "@/components/crm/bulk-enrich-panel";
+import { EnrichAccountRowButton } from "@/components/crm/enrich-account-row-button";
 import { DataTable } from "@/components/crm/ui/data-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
@@ -221,9 +222,12 @@ export async function RelationshipListPage({
         {accounts.map((account) => (
           <tr key={account.id} className="border-t border-slate-200 hover:bg-slate-50">
             <td className="px-4 py-3 font-medium">
-              <Link href={`/crm/accounts/${account.id}`} className="hover:underline">
-                {account.companyName}
-              </Link>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link href={`/crm/accounts/${account.id}`} className="hover:underline">
+                  {account.companyName}
+                </Link>
+                <EnrichAccountRowButton accountId={account.id} />
+              </div>
             </td>
             {!fixedType ? (
               <td className="px-4 py-3">
