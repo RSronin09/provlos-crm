@@ -162,11 +162,11 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
 
   // Primary: LinkedIn profile search
   const linkedinQuery = domain
-    ? `site:linkedin.com/in "${companyName}" (operations OR logistics OR "supply chain" OR procurement OR distribution OR fleet)`
-    : `"${companyName}" (operations manager OR director of operations OR "supply chain" OR logistics manager OR "vp operations") site:linkedin.com/in`;
+    ? `site:linkedin.com/in "${companyName}" (operations OR logistics OR "supply chain" OR procurement OR distribution OR "materials management" OR purchasing OR facilities OR administrative)`
+    : `"${companyName}" ("operations manager" OR "director of operations" OR "supply chain" OR "logistics manager" OR "materials management" OR "purchasing director" OR "executive director" OR administrator) site:linkedin.com/in`;
 
   // Secondary: general title search
-  const generalQuery = `"${companyName}" (director OR manager OR "vp" OR "head of") (operations OR logistics OR "supply chain" OR distribution)`;
+  const generalQuery = `"${companyName}" (director OR manager OR administrator OR "executive director") (operations OR logistics OR "supply chain" OR "materials management" OR purchasing OR procurement)`;
 
   const [linkedinResults, generalResults] = await Promise.all([
     serperSearch(linkedinQuery),
@@ -234,21 +234,43 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
 
 // Titles we target for decision-maker discovery
 const APOLLO_TARGET_TITLES = [
+  // General operations
   "VP Operations",
   "Vice President Operations",
   "Director of Operations",
-  "Director of Logistics",
-  "Director of Supply Chain",
-  "Head of Operations",
-  "Head of Logistics",
   "Chief Operating Officer",
   "COO",
   "Operations Manager",
+  "Head of Operations",
+  // Logistics & supply chain
+  "Director of Logistics",
+  "Director of Supply Chain",
+  "Head of Logistics",
   "Logistics Manager",
   "Supply Chain Manager",
   "Fleet Manager",
   "Transportation Manager",
+  "Distribution Manager",
+  // Procurement & purchasing
   "Procurement Manager",
+  "Purchasing Manager",
+  "Purchasing Director",
+  "Director of Purchasing",
+  // Healthcare-specific operations titles
+  "Materials Management Director",
+  "Director of Materials Management",
+  "Materials Manager",
+  "Supply Chain Director",
+  "Director of Supply Chain",
+  "Facilities Manager",
+  "Director of Facilities",
+  "Administrative Director",
+  "Director of Administrative Services",
+  "Chief Administrative Officer",
+  "Administrator",
+  "Executive Director",
+  "Director of Support Services",
+  "Environmental Services Director",
 ];
 
 type ApolloSearchPerson = {
