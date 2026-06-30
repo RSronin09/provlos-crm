@@ -49,7 +49,11 @@ export default async function DriverViewPage({ searchParams }: DriverViewPagePro
   return (
     <div className="mx-auto max-w-lg space-y-4 px-3 py-6">
       {/* Driver selector */}
-      <form className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <form
+        method="get"
+        action="/crm/deliveries/driver-view"
+        className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+      >
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
           Select Your Name
         </label>

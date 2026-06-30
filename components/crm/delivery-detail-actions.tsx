@@ -35,6 +35,7 @@ export function DeliveryDetailActions({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState(currentDriverId ?? "");
   const [selectedStatus, setSelectedStatus] = useState<DeliveryStatus>(currentStatus);
   const [selectedPriority, setSelectedPriority] = useState<DeliveryPriority>(currentPriority);
@@ -43,11 +44,13 @@ export function DeliveryDetailActions({
     try {
       setBusy(true);
       setStatus(null);
+      setIsError(false);
       await action();
       setStatus(successMsg);
       router.refresh();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Error");
+      setIsError(true);
     } finally {
       setBusy(false);
     }
@@ -116,7 +119,13 @@ export function DeliveryDetailActions({
   return (
     <div className="space-y-4">
       {status ? (
-        <p className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <p
+          className={`rounded-md border px-3 py-2 text-sm ${
+            isError
+              ? "border-rose-300 bg-rose-50 text-rose-700"
+              : "border-emerald-300 bg-emerald-50 text-emerald-700"
+          }`}
+        >
           {status}
         </p>
       ) : null}

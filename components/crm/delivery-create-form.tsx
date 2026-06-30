@@ -37,6 +37,17 @@ export function DeliveryCreateForm({
   const [priorityLevel, setPriorityLevel] = useState<"standard" | "urgent">("standard");
   const [assignedDriverId, setAssignedDriverId] = useState(suggestedDriverId ?? "");
 
+  // datetime-local inputs have no timezone info. Interpreting them with the
+  // browser's Date constructor treats them as the user's local wall-clock
+  // time, then .toISOString() converts to the correct absolute UTC instant —
+  // this avoids the server (which runs in UTC) misreading the same string
+  // as already being in UTC and shifting the schedule by several hours.
+  function localInputToIso(value: string): string | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -44,6 +55,9 @@ export function DeliveryCreateForm({
     if (!pickupAddress.trim()) { setError("Pickup address is required."); return; }
     if (!deliveryAddress.trim()) { setError("Delivery address is required."); return; }
     if (!requestedDeliveryDateTime) { setError("Requested delivery date/time is required."); return; }
+
+    const requestedIso = localInputToIso(requestedDeliveryDateTime);
+    if (!requestedIso) { setError("Invalid requested delivery date/time."); return; }
 
     setBusy(true);
     try {
@@ -54,8 +68,8 @@ export function DeliveryCreateForm({
           customerId: customerId || null,
           pickupAddress,
           deliveryAddress,
-          requestedDeliveryDateTime,
-          pickupDateTime: pickupDateTime || null,
+          requestedDeliveryDateTime: requestedIso,
+          pickupDateTime: localInputToIso(pickupDateTime),
           pickupContactName: pickupContactName || null,
           pickupContactPhone: pickupContactPhone || null,
           deliveryContactName: deliveryContactName || null,

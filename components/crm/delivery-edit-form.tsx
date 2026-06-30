@@ -28,10 +28,29 @@ type DeliveryEditFormProps = {
   drivers: Driver[];
 };
 
-/** Convert ISO datetime string to datetime-local input value (YYYY-MM-DDTHH:mm) */
+/** Convert a UTC ISO datetime string to a datetime-local input value
+ * (YYYY-MM-DDTHH:mm) expressed in the browser's local timezone. Using
+ * slice() on the raw ISO string would show UTC clock time instead of the
+ * dispatcher's local time, which can be off by several hours. */
 function toLocalInputValue(iso: string | null): string {
   if (!iso) return "";
-  return iso.slice(0, 16);
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/** Convert a datetime-local input value (local wall-clock time) back to a
+ * true UTC ISO instant for the server, which runs in UTC. */
+function localInputToIso(value: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export function DeliveryEditForm({ initialValues, accounts, drivers }: DeliveryEditFormProps) {
@@ -78,6 +97,9 @@ export function DeliveryEditForm({ initialValues, accounts, drivers }: DeliveryE
     if (!deliveryAddress.trim()) { setError("Delivery address is required."); return; }
     if (!requestedDeliveryDateTime) { setError("Requested delivery date/time is required."); return; }
 
+    const requestedIso = localInputToIso(requestedDeliveryDateTime);
+    if (!requestedIso) { setError("Invalid requested delivery date/time."); return; }
+
     setBusy(true);
     try {
       const res = await fetch(`/api/deliveries/${initialValues.id}`, {
@@ -87,21 +109,39 @@ export function DeliveryEditForm({ initialValues, accounts, drivers }: DeliveryE
           customerId: customerId || null,
           pickupAddress,
           deliveryAddress,
-          requestedDeliveryDateTime,
-          pickupDateTime: pickupDateTime || null,
+          requestedDeliveryDateTime: requestedIso,
+          pickupDateTime: localInputToIso(pickupDateTime),
           pickupContactName: pickupContactName || null,
           pickupContactPhone: pickupContactPhone || null,
           deliveryContactName: deliveryContactName || null,
           deliveryContactPhone: deliveryContactPhone || null,
           packageNotes: packageNotes || null,
           priorityLevel,
-          assignedDriverId: assignedDriverId || null,
         }),
       });
 
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data?.error ?? "Failed to save changes.");
+      }
+
+      // Driver assignment changes go through the dedicated /assign endpoint
+      // so delivery status, assignedAt, and status history stay consistent —
+      // the generic PATCH above intentionally does not touch driver assignment.
+      const initialDriverId = initialValues.assignedDriverId ?? "";
+      if (assignedDriverId !== initialDriverId) {
+        const assignRes = await fetch(`/api/deliveries/${initialValues.id}/assign`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            driverId: assignedDriverId || null,
+            changedBy: "dispatcher",
+          }),
+        });
+        if (!assignRes.ok) {
+          const data = await assignRes.json().catch(() => ({}));
+          throw new Error(data?.error ?? "Saved delivery details, but failed to update driver assignment.");
+        }
       }
 
       setSuccess(true);

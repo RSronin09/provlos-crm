@@ -57,7 +57,7 @@ export function DeliveryIssuePanel({
       const res = await fetch(`/api/deliveries/${deliveryId}/issues`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ issueType, note: note || null, reportedBy: "driver" }),
+        body: JSON.stringify({ issueType, note: note || null, reportedBy: "dispatcher" }),
       });
       if (!res.ok) throw new Error("Failed to report issue.");
       setShowForm(false);

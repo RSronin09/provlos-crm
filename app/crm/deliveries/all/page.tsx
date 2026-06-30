@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
 import { DeliveryStatusBadge } from "@/components/crm/ui/delivery-status-badge";
 import { PriorityBadge } from "@/components/crm/ui/priority-badge";
-import { isOverdue, isAtRisk, TERMINAL_STATUSES } from "@/lib/delivery-queue";
+import { isOverdue, isAtRisk, TERMINAL_STATUSES, IN_PROGRESS_STATUSES } from "@/lib/delivery-queue";
 
 type AllDeliveriesPageProps = {
   searchParams?: Promise<{
@@ -20,6 +20,7 @@ type AllDeliveriesPageProps = {
     unassignedOnly?: string;
     hasIssue?: string;
     openOnly?: string;
+    inProgressOnly?: string;
     dateFrom?: string;
     dateTo?: string;
     customerId?: string;
@@ -41,6 +42,7 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
   const unassignedOnly = filters.unassignedOnly === "true";
   const hasIssue = filters.hasIssue === "true";
   const openOnly = filters.openOnly === "true";
+  const inProgressOnly = filters.inProgressOnly === "true";
 
   let dbWarning: string | null = null;
   type DeliveryRow = Prisma.DeliveryGetPayload<{
@@ -68,6 +70,7 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
           ...(filters.customerId ? { customerId: filters.customerId } : {}),
           ...(unassignedOnly ? { assignedDriverId: null } : {}),
           ...(openOnly ? { status: { notIn: TERMINAL_STATUSES } } : {}),
+          ...(inProgressOnly ? { status: { in: IN_PROGRESS_STATUSES } } : {}),
           ...(overdueOnly
             ? {
                 status: { notIn: TERMINAL_STATUSES },
@@ -109,7 +112,7 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
   }
 
   const activeFiltersCount = [
-    status, priority, filters.driverId, overdueOnly, unassignedOnly, hasIssue, openOnly, filters.dateFrom, filters.dateTo, filters.customerId, filters.search,
+    status, priority, filters.driverId, overdueOnly, unassignedOnly, hasIssue, openOnly, inProgressOnly, filters.dateFrom, filters.dateTo, filters.customerId, filters.search,
   ].filter(Boolean).length;
 
   return (

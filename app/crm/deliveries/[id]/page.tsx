@@ -252,7 +252,7 @@ export default async function DeliveryDetailPage({ params }: DeliveryDetailPageP
                 resolvedBy: i.resolvedBy,
                 resolveNote: i.resolveNote,
               }))}
-              canReport={false}
+              canReport={true}
             />
           </div>
         </div>

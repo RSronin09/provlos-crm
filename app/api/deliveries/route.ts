@@ -84,7 +84,10 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return zodErrorResponse(parsed.error);
 
   const { assignedDriverId, ...rest } = parsed.data;
-  const driverId = assignedDriverId ?? (await suggestDriver());
+  // Only auto-suggest a driver when the field is entirely omitted from the request.
+  // An explicit null means the dispatcher chose "Unassigned" and that must be respected.
+  const driverIdProvided = Object.prototype.hasOwnProperty.call(body, "assignedDriverId");
+  const driverId = driverIdProvided ? assignedDriverId : await suggestDriver();
 
   // Geocode addresses — non-blocking; failure does not abort delivery creation
   const geoCoords = await geocodeDeliveryAddresses(

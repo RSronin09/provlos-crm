@@ -173,7 +173,7 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
     const swapOrder = driverDeliveries[swapIdx].stopOrder ?? swapIdx + 1;
 
     await run(async () => {
-      await Promise.all([
+      const [resA, resB] = await Promise.all([
         fetch(`/api/deliveries/${deliveryId}/stop-order`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -185,15 +185,20 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
           body: JSON.stringify({ stopOrder: thisOrder }),
         }),
       ]);
+      if (!resA.ok || !resB.ok) throw new Error("Failed to update stop order.");
     }, "Stop order updated.");
   }
 
   async function resequenceDriver(driverId: string) {
     setResequencingDriver(driverId);
+    setFeedback(null);
     try {
       const res = await fetch(`/api/drivers/${driverId}/resequence`, { method: "POST" });
       if (!res.ok) throw new Error("Resequence failed.");
+      setFeedback("Stops resequenced.");
       router.refresh();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : "Resequence failed.");
     } finally {
       setResequencingDriver(null);
     }

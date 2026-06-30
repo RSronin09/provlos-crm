@@ -106,7 +106,7 @@ export default async function DeliveryDashboardPage() {
         <MetricCard label="Assigned" value={assignedCount}
           footer={<Link href="/crm/deliveries/all?status=assigned" className="text-xs text-blue-700 hover:underline">View</Link>} />
         <MetricCard label="In Progress" value={inProgressCount} hint="En route / picked up"
-          footer={<Link href="/crm/deliveries/all?status=en_route_to_pickup" className="text-xs text-blue-700 hover:underline">View</Link>} />
+          footer={<Link href="/crm/deliveries/all?inProgressOnly=true" className="text-xs text-blue-700 hover:underline">View</Link>} />
         <MetricCard label="Delivered Today" value={deliveredTodayCount}
           footer={<Link href="/crm/deliveries/all?status=delivered" className="text-xs text-blue-700 hover:underline">View</Link>} />
         <MetricCard label="Issues" value={issueCount}
