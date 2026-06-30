@@ -4,6 +4,7 @@ import { useState } from "react";
 
 type EnrichResult = {
   contactsAdded: number;
+  contactsUpdated: number;
   totalContacts: number;
   providersUsed: string[];
 };
@@ -68,9 +69,20 @@ export function EnrichButton({ accountId }: { accountId: string }) {
 
       {status === "done" && result && (
         <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700">
-          {result.contactsAdded > 0
-            ? `✓ ${result.contactsAdded} new contact${result.contactsAdded !== 1 ? "s" : ""} added via ${result.providersUsed.join(", ")}`
-            : `Search complete — no new contacts found (${result.totalContacts} already on file).`}
+          {result.contactsAdded > 0 || result.contactsUpdated > 0 ? (
+            <>
+              {result.contactsAdded > 0 && (
+                <span>✓ {result.contactsAdded} new contact{result.contactsAdded !== 1 ? "s" : ""} added</span>
+              )}
+              {result.contactsAdded > 0 && result.contactsUpdated > 0 && <span> · </span>}
+              {result.contactsUpdated > 0 && (
+                <span>✓ {result.contactsUpdated} contact{result.contactsUpdated !== 1 ? "s" : ""} updated with email/phone</span>
+              )}
+              {" "}via {result.providersUsed.join(", ")}
+            </>
+          ) : (
+            `Search complete — no new data found (${result.totalContacts} contacts already up to date).`
+          )}
         </div>
       )}
 

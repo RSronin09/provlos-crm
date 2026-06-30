@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     });
 
     let added = 0;
+    let updated = 0;
 
     for (const contact of contacts) {
       const fullName =
@@ -39,24 +40,59 @@ export async function POST(request: NextRequest) {
         [contact.firstName, contact.lastName].filter(Boolean).join(" ");
       if (!fullName) continue;
 
-      const existing =
-        (contact.email
-          ? await db.contact.findFirst({
-              where: {
-                accountId: account.id,
-                email: { equals: contact.email, mode: "insensitive" },
-              },
-            })
-          : null) ??
-        (await db.contact.findFirst({
-          where: {
-            accountId: account.id,
-            fullName: { equals: fullName, mode: "insensitive" },
-          },
-        }));
+      // Look for existing contact by email match first, then by name
+      const existingByEmail = contact.email
+        ? await db.contact.findFirst({
+            where: {
+              accountId: account.id,
+              email: { equals: contact.email, mode: "insensitive" },
+            },
+          })
+        : null;
 
-      if (existing) continue;
+      const existingByName = await db.contact.findFirst({
+        where: {
+          accountId: account.id,
+          fullName: { equals: fullName, mode: "insensitive" },
+        },
+      });
 
+      const existing = existingByEmail ?? existingByName;
+
+      if (existing) {
+        // Update the existing contact if Apollo found new email/phone/linkedin
+        // that wasn't there before — this is the key fix for existing contacts
+        const needsUpdate =
+          (!existing.email && contact.email) ||
+          (!existing.phone && contact.phone) ||
+          (!existing.linkedinUrl && contact.linkedinUrl) ||
+          (!existing.title && contact.title);
+
+        if (needsUpdate) {
+          await db.contact.update({
+            where: { id: existing.id },
+            data: {
+              email: existing.email ?? contact.email ?? undefined,
+              phone: existing.phone ?? contact.phone ?? undefined,
+              linkedinUrl: existing.linkedinUrl ?? contact.linkedinUrl ?? undefined,
+              title: existing.title ?? contact.title ?? undefined,
+              department: existing.department ?? contact.department ?? undefined,
+              firstName: existing.firstName ?? contact.firstName ?? undefined,
+              lastName: existing.lastName ?? contact.lastName ?? undefined,
+              confidenceScore: Math.max(
+                existing.confidenceScore ?? 0,
+                contact.confidenceScore ?? 0,
+              ),
+              source: contact.source ?? existing.source ?? undefined,
+              lastVerifiedAt: new Date(),
+            },
+          });
+          updated++;
+        }
+        continue;
+      }
+
+      // Brand new contact — create it
       await db.contact.create({
         data: {
           accountId: account.id,
@@ -67,6 +103,7 @@ export async function POST(request: NextRequest) {
           department: contact.department ?? undefined,
           email: contact.email ?? undefined,
           phone: contact.phone ?? undefined,
+          linkedinUrl: contact.linkedinUrl ?? undefined,
           confidenceScore: contact.confidenceScore ?? undefined,
           source: contact.source ?? "enrichment",
           lastVerifiedAt: new Date(),
@@ -88,11 +125,12 @@ export async function POST(request: NextRequest) {
         accountId: account.id,
         companyName: account.companyName,
         contactsAdded: added,
+        contactsUpdated: updated,
         totalContacts: contacts.length,
         providersUsed,
         resolvedWebsite,
       },
-      message: `Enrichment complete: ${added} new contacts added for ${account.companyName}.`,
+      message: `Enrichment complete: ${added} new contacts added, ${updated} existing contacts updated for ${account.companyName}.`,
     });
   } catch (err) {
     return Response.json(

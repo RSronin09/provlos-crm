@@ -15,6 +15,7 @@ type RowResult = {
   companyName: string;
   status: "pending" | "enriching" | "done" | "error";
   contactsAdded?: number;
+  contactsUpdated?: number;
   error?: string;
 };
 
@@ -74,11 +75,12 @@ export function BulkEnrichPanel({
           );
         } else {
           const contactsAdded: number = json.data?.contactsAdded ?? 0;
-          added += contactsAdded;
+          const contactsUpdated: number = json.data?.contactsUpdated ?? 0;
+          added += contactsAdded + contactsUpdated;
           setTotalAdded(added);
           setRows((prev) =>
             prev.map((r, idx) =>
-              idx === i ? { ...r, status: "done", contactsAdded } : r,
+              idx === i ? { ...r, status: "done", contactsAdded, contactsUpdated } : r,
             ),
           );
         }
@@ -224,7 +226,7 @@ export function BulkEnrichPanel({
                           )}
                           {row.status === "done" && (
                             <span className="text-green-600">
-                              +{row.contactsAdded ?? 0} contacts
+                              +{(row.contactsAdded ?? 0) + (row.contactsUpdated ?? 0)} contacts
                             </span>
                           )}
                           {row.status === "error" && (

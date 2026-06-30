@@ -18,17 +18,42 @@ async function saveEnrichedContacts(accountId: string, companyName: string, webs
       const fullName = contact.fullName || [contact.firstName, contact.lastName].filter(Boolean).join(" ");
       if (!fullName) continue;
 
-      const existing =
-        (contact.email
-          ? await db.contact.findFirst({
-              where: { accountId, email: { equals: contact.email, mode: "insensitive" } },
-            })
-          : null) ??
-        (await db.contact.findFirst({
-          where: { accountId, fullName: { equals: fullName, mode: "insensitive" } },
-        }));
+      const existingByEmail = contact.email
+        ? await db.contact.findFirst({
+            where: { accountId, email: { equals: contact.email, mode: "insensitive" } },
+          })
+        : null;
 
-      if (existing) continue;
+      const existingByName = await db.contact.findFirst({
+        where: { accountId, fullName: { equals: fullName, mode: "insensitive" } },
+      });
+
+      const existing = existingByEmail ?? existingByName;
+
+      if (existing) {
+        // Update if Apollo found email/phone that wasn't there before
+        const needsUpdate =
+          (!existing.email && contact.email) ||
+          (!existing.phone && contact.phone) ||
+          (!existing.linkedinUrl && contact.linkedinUrl);
+
+        if (needsUpdate) {
+          await db.contact.update({
+            where: { id: existing.id },
+            data: {
+              email: existing.email ?? contact.email ?? undefined,
+              phone: existing.phone ?? contact.phone ?? undefined,
+              linkedinUrl: existing.linkedinUrl ?? contact.linkedinUrl ?? undefined,
+              title: existing.title ?? contact.title ?? undefined,
+              confidenceScore: Math.max(existing.confidenceScore ?? 0, contact.confidenceScore ?? 0),
+              source: contact.source ?? existing.source ?? undefined,
+              lastVerifiedAt: new Date(),
+            },
+          });
+          added++;
+        }
+        continue;
+      }
 
       await db.contact.create({
         data: {
@@ -40,6 +65,7 @@ async function saveEnrichedContacts(accountId: string, companyName: string, webs
           department: contact.department ?? undefined,
           email: contact.email ?? undefined,
           phone: contact.phone ?? undefined,
+          linkedinUrl: contact.linkedinUrl ?? undefined,
           confidenceScore: contact.confidenceScore ?? undefined,
           source: contact.source ?? "enrichment",
           lastVerifiedAt: new Date(),
