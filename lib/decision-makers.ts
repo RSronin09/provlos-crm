@@ -450,6 +450,54 @@ async function searchContactsFromHunter(domain: string | null) {
 // Apollo person-level match — enriches a single known contact by name
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Name cleaning — strip credentials and artifacts before sending to APIs
+// ---------------------------------------------------------------------------
+
+// Professional credentials to strip (case-insensitive, comma/space separated)
+const CREDENTIAL_PATTERN =
+  /\b(?:ma|mha|mba|ms|bs|ba|rn|bsn|msn|lpn|np|pa|md|do|dvm|phd|edd|jd|cpa|cfa|cfp|coo|ceo|cfo|nha|crcst|lnha|fache|facc|chfp|chc|sphr|phr|shrm|six sigma|pmp|ccm|cmc|cadc|lcsw|lmft|lpc)\b/gi;
+
+function cleanPersonName(raw: string | null | undefined): {
+  firstName: string | null;
+  lastName: string | null;
+  fullName: string | null;
+} {
+  if (!raw || raw.trim().length < 2) return { firstName: null, lastName: null, fullName: null };
+
+  let name = raw.trim();
+
+  // Strip everything after " - " (company or title artifacts e.g. "John Smith - circle k")
+  name = name.split(/\s+[-–—]\s+/)[0] ?? name;
+
+  // Strip credentials (e.g. "Katie Berzowski, MA, NHA")
+  name = name.replace(/,\s*(?:[A-Z]{1,6},?\s*)+$/i, "").trim();
+  name = name.replace(CREDENTIAL_PATTERN, "").trim();
+
+  // Strip trailing commas, dots, extra spaces
+  name = name.replace(/[,.\s]+$/, "").replace(/\s{2,}/g, " ").trim();
+
+  // Sanity check — should look like a real name (2+ words of letters)
+  const parts = name.split(/\s+/).filter((p) => /^[A-Za-z'-]+$/.test(p));
+  if (parts.length < 1 || name.length < 3) return { firstName: null, lastName: null, fullName: null };
+
+  // Reject strings that are clearly job titles, not names
+  const lowerName = name.toLowerCase();
+  const titleWords = [
+    "operations", "supervisor", "manager", "director", "administrator",
+    "coordinator", "specialist", "technician", "nurse", "nursing", "plant",
+    "weekend", "regional", "assistant", "associate", "senior", "junior",
+  ];
+  if (titleWords.some((w) => lowerName.startsWith(w))) {
+    return { firstName: null, lastName: null, fullName: null };
+  }
+
+  const firstName = parts[0] ?? null;
+  const lastName = parts.length > 1 ? parts.slice(1).join(" ") : null;
+
+  return { firstName, lastName, fullName: name };
+}
+
 export type ApolloContactMatch = {
   email: string | null;
   phone: string | null;
@@ -469,65 +517,159 @@ export async function enrichContactByName(input: {
   domain?: string | null;
   linkedinUrl?: string | null;
 }): Promise<ApolloContactMatch | null> {
-  const apiKey = process.env.APOLLO_API_KEY;
-  if (!apiKey) return null;
+  // Clean the name before sending to any API — strips credentials,
+  // company name artifacts, and non-person strings
+  const cleaned = cleanPersonName(input.fullName ?? [input.firstName, input.lastName].filter(Boolean).join(" "));
 
-  // Build the best possible match payload
-  const body: Record<string, unknown> = {
-    organization_name: input.organizationName,
-    reveal_personal_emails: false,
-    reveal_phone_number: true,
-  };
+  // If the name doesn't look like a real person, skip both APIs
+  const firstName = cleaned.firstName ?? input.firstName;
+  const lastName = cleaned.lastName ?? input.lastName;
+  if (!firstName && !input.linkedinUrl) return null;
 
-  // LinkedIn URL is the strongest signal — use it if available
-  if (input.linkedinUrl) {
-    body.linkedin_url = input.linkedinUrl;
-  } else {
-    // Name-based match — split fullName if firstName/lastName not available
-    const nameParts = (!input.firstName && input.fullName)
-      ? input.fullName.trim().split(/\s+/)
-      : null;
+  // ---- Try Apollo first ----
+  const apolloKey = process.env.APOLLO_API_KEY;
+  if (apolloKey) {
+    const body: Record<string, unknown> = {
+      organization_name: input.organizationName,
+      reveal_personal_emails: false,
+      reveal_phone_number: true,
+    };
 
-    body.first_name = input.firstName || nameParts?.[0] || null;
-    body.last_name =
-      input.lastName ||
-      (nameParts && nameParts.length > 1 ? nameParts.slice(1).join(" ") : null);
+    if (input.linkedinUrl) {
+      body.linkedin_url = input.linkedinUrl;
+    } else {
+      body.first_name = firstName;
+      body.last_name = lastName;
+    }
+    if (input.domain) body.domain = input.domain;
+
+    try {
+      const response = await fetch("https://api.apollo.io/api/v1/people/match", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Api-Key": apolloKey,
+          "Cache-Control": "no-cache",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (response.ok) {
+        const payload = (await response.json()) as { person?: ApolloEnrichedPerson };
+        const person = payload.person;
+
+        if (person && (person.email || person.phone_numbers?.length)) {
+          const primaryPhone =
+            person.phone_numbers?.find((p) => p.type === "work_direct")?.raw_number ??
+            person.phone_numbers?.[0]?.raw_number ??
+            null;
+
+          return {
+            email: person.email ?? null,
+            phone: primaryPhone,
+            linkedinUrl: person.linkedin_url ?? null,
+            title: person.title ?? null,
+            firstName: person.first_name ?? firstName,
+            lastName: person.last_name ?? lastName,
+            fullName: person.name ?? cleaned.fullName,
+            confidenceScore: person.email ? 0.95 : 0.70,
+          };
+        }
+      }
+    } catch {
+      // Apollo failed — fall through to PDL
+    }
   }
 
-  if (input.domain) body.domain = input.domain;
+  // ---- Fallback: People Data Labs ----
+  const pdlResult = await enrichContactFromPDL({
+    firstName,
+    lastName,
+    organizationName: input.organizationName,
+    domain: input.domain,
+    linkedinUrl: input.linkedinUrl,
+  });
+
+  return pdlResult;
+}
+
+// ---------------------------------------------------------------------------
+// People Data Labs (PDL) — person enrichment fallback
+// Broader coverage than Apollo, especially for healthcare, non-B2B industries
+// ---------------------------------------------------------------------------
+
+type PDLPersonResponse = {
+  status: number;
+  likelihood?: number;
+  data?: {
+    full_name?: string;
+    first_name?: string;
+    last_name?: string;
+    job_title?: string;
+    emails?: { address: string; type?: string }[];
+    phone_numbers?: { number: string }[];
+    linkedin_url?: string;
+  };
+};
+
+async function enrichContactFromPDL(input: {
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string;
+  domain?: string | null;
+  linkedinUrl?: string | null;
+}): Promise<ApolloContactMatch | null> {
+  const apiKey = process.env.PDL_API_KEY;
+  if (!apiKey) return null;
 
   try {
-    const response = await fetch("https://api.apollo.io/api/v1/people/match", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Api-Key": apiKey,
-        "Cache-Control": "no-cache",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-    });
+    const params = new URLSearchParams();
+    params.set("min_likelihood", "0.6");
 
+    if (input.linkedinUrl) {
+      params.set("profile", input.linkedinUrl.replace(/^https?:\/\//, ""));
+    } else {
+      if (input.firstName) params.set("first_name", input.firstName);
+      if (input.lastName) params.set("last_name", input.lastName);
+      params.set("company", input.organizationName);
+      if (input.domain) params.set("company_domain", input.domain);
+    }
+
+    const response = await fetch(
+      `https://api.peopledatalabs.com/v5/person/enrich?${params.toString()}`,
+      {
+        headers: {
+          "X-Api-Key": apiKey,
+          "Accept": "application/json",
+        },
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+
+    // 404 = no match (not an error), anything else unexpected = bail
+    if (response.status === 404) return null;
     if (!response.ok) return null;
 
-    const payload = (await response.json()) as { person?: ApolloEnrichedPerson };
-    const person = payload.person;
-    if (!person) return null;
+    const payload = (await response.json()) as PDLPersonResponse;
+    if (!payload.data) return null;
 
-    const primaryPhone =
-      person.phone_numbers?.find((p) => p.type === "work_direct")?.raw_number ??
-      person.phone_numbers?.[0]?.raw_number ??
+    const { data } = payload;
+    const primaryEmail =
+      data.emails?.find((e) => e.type === "professional")?.address ??
+      data.emails?.[0]?.address ??
       null;
+    const primaryPhone = data.phone_numbers?.[0]?.number ?? null;
 
     return {
-      email: person.email ?? null,
+      email: primaryEmail,
       phone: primaryPhone,
-      linkedinUrl: person.linkedin_url ?? null,
-      title: person.title ?? null,
-      firstName: person.first_name ?? null,
-      lastName: person.last_name ?? null,
-      fullName: person.name ?? null,
-      confidenceScore: person.email ? 0.95 : 0.70,
+      linkedinUrl: data.linkedin_url ? `https://${data.linkedin_url}` : null,
+      title: data.job_title ?? null,
+      firstName: data.first_name ?? null,
+      lastName: data.last_name ?? null,
+      fullName: data.full_name ?? null,
+      confidenceScore: primaryEmail ? 0.88 : 0.65,
     };
   } catch {
     return null;

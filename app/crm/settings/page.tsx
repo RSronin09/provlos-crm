@@ -29,10 +29,11 @@ export default function SettingsPage() {
   const serperKey = process.env.SERPER_API_KEY;
   const hunterKey = process.env.HUNTER_API_KEY;
   const apolloKey = process.env.APOLLO_API_KEY;
+  const pdlKey = process.env.PDL_API_KEY;
   const dbUrl = process.env.DATABASE_URL;
   const adminToken = process.env.ADMIN_TOKEN;
 
-  const enrichmentReady = !!(apolloKey || serperKey || hunterKey);
+  const enrichmentReady = !!(apolloKey || pdlKey || serperKey || hunterKey);
 
   return (
     <div className="space-y-6">
@@ -52,6 +53,7 @@ export default function SettingsPage() {
         <div className="px-5">
           <KeyStatus name="DATABASE_URL" value={dbUrl} />
           <KeyStatus name="APOLLO_API_KEY" value={apolloKey} />
+          <KeyStatus name="PDL_API_KEY" value={pdlKey} />
           <KeyStatus name="SERPER_API_KEY" value={serperKey} />
           <KeyStatus name="HUNTER_API_KEY" value={hunterKey} />
           <KeyStatus name="ADMIN_TOKEN" value={adminToken} />
@@ -67,11 +69,9 @@ export default function SettingsPage() {
           <p className="text-sm text-amber-700">
             To look up decision makers, you need at least one of{" "}
             <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">APOLLO_API_KEY</code>{" "}
-            (recommended — returns verified email + phone),{" "}
-            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">SERPER_API_KEY</code>{" "}
-            or{" "}
-            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">HUNTER_API_KEY</code>{" "}
-            set. Without them, the Enrich buttons will run but return no results.
+            (B2B contacts){" "}or{" "}
+            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">PDL_API_KEY</code>{" "}
+            (healthcare &amp; all industries fallback) set.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <a
@@ -81,6 +81,14 @@ export default function SettingsPage() {
               className="inline-flex items-center gap-1 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
             >
               Get Apollo API key → (recommended)
+            </a>
+            <a
+              href="https://dashboard.peopledatalabs.com/api-keys"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              Get PDL API key → (healthcare fallback)
             </a>
             <a
               href="https://serper.dev"
