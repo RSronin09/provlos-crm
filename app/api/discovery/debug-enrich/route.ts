@@ -100,7 +100,8 @@ export async function POST(request: NextRequest) {
     diagnostics.apolloRequest = apolloBody;
 
     try {
-      const res = await fetch("https://api.apollo.io/api/v1/people/match", {
+      // Try new API path first, fall back to legacy path
+      let res = await fetch("https://api.apollo.io/api/v1/people/match", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -111,7 +112,28 @@ export async function POST(request: NextRequest) {
         signal: AbortSignal.timeout(10_000),
       });
 
-      const raw = await res.json();
+      // If 403, try legacy path
+      if (res.status === 403) {
+        const legacyBody = { ...apolloBody, api_key: process.env.APOLLO_API_KEY };
+        const legacyRes = await fetch("https://api.apollo.io/v1/people/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
+          body: JSON.stringify(legacyBody),
+          signal: AbortSignal.timeout(10_000),
+        });
+        diagnostics.apolloLegacyStatus = legacyRes.status;
+        const legacyRaw = await legacyRes.json();
+        diagnostics.apolloLegacyResponse = {
+          hasPerson: !!legacyRaw?.person,
+          email: legacyRaw?.person?.email ?? null,
+          phoneCount: legacyRaw?.person?.phone_numbers?.length ?? 0,
+          errorMessage: legacyRaw?.error ?? null,
+          errorCode: legacyRaw?.error_code ?? null,
+        };
+        if (legacyRes.ok) res = legacyRes;
+      }
+
+      const raw = await res.json().catch(() => ({}));
       diagnostics.apolloStatus = res.status;
       diagnostics.apolloResponse = {
         hasPerson: !!raw?.person,
@@ -120,6 +142,8 @@ export async function POST(request: NextRequest) {
         name: raw?.person?.name ?? null,
         title: raw?.person?.title ?? null,
         rawKeys: raw ? Object.keys(raw) : [],
+        errorMessage: raw?.error ?? null,
+        errorCode: raw?.error_code ?? null,
       };
     } catch (e) {
       diagnostics.apolloError = String(e);
