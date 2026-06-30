@@ -84,6 +84,15 @@ export function AccountRecordEditableCards({
 
   const [notes, setNotes] = useState(account.notes ?? "");
   const [contacts, setContacts] = useState(initialContacts);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContact, setNewContact] = useState({
+    fullName: "",
+    title: "",
+    department: "",
+    email: "",
+    phone: "",
+    linkedinUrl: "",
+  });
   const [activities, setActivities] = useState(initialActivities);
   const [tasks, setTasks] = useState(
     initialTasks.map((task) => {
@@ -317,9 +326,70 @@ export function AccountRecordEditableCards({
     router.refresh();
   }
 
+  async function toggleTaskStatus(taskId: string, currentStatus: string) {
+    const nextStatus = currentStatus === "DONE" ? "OPEN" : "DONE";
+    await request(`/api/tasks/${taskId}`, "PATCH", { status: nextStatus });
+    setTasks((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, status: nextStatus } : task)),
+    );
+    router.refresh();
+  }
+
   async function deleteContact(contactId: string) {
     await request(`/api/contacts/${contactId}`, "DELETE");
     setContacts((prev) => prev.filter((contact) => contact.id !== contactId));
+    router.refresh();
+  }
+
+  async function createContact() {
+    const fullName = newContact.fullName.trim();
+    if (!fullName) {
+      throw new Error("Contact name is required.");
+    }
+
+    const email = newContact.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Enter a valid email address.");
+    }
+
+    const website = newContact.linkedinUrl.trim();
+    if (website && !/^https?:\/\//i.test(website)) {
+      throw new Error("LinkedIn URL must start with http:// or https://");
+    }
+
+    const payload = await request(`/api/accounts/${accountId}/contacts`, "POST", {
+      fullName,
+      title: newContact.title.trim() || null,
+      department: newContact.department.trim() || null,
+      email: email || null,
+      phone: newContact.phone.trim() || null,
+      linkedinUrl: website || null,
+      source: "manual",
+    });
+
+    const created = payload.data as {
+      id: string;
+      fullName: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      title: string | null;
+      email: string | null;
+      phone: string | null;
+    };
+
+    setContacts((prev) => [
+      {
+        id: created.id,
+        title: created.fullName || `${created.firstName ?? ""} ${created.lastName ?? ""}`.trim() || "Unnamed contact",
+        subtitle: created.title ?? null,
+        meta: `${created.email ?? "No email"} | ${created.phone ?? "No phone"}`,
+        hasEmail: !!created.email,
+        hasPhone: !!created.phone,
+      },
+      ...prev,
+    ]);
+    setNewContact({ fullName: "", title: "", department: "", email: "", phone: "", linkedinUrl: "" });
+    setShowAddContact(false);
     router.refresh();
   }
 
@@ -490,7 +560,69 @@ export function AccountRecordEditableCards({
       </section>
 
       <section id="contacts" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-lg font-semibold">Contacts</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Contacts</h3>
+          <button
+            type="button"
+            onClick={() => setShowAddContact((prev) => !prev)}
+            className="rounded-md border border-slate-300 px-3 py-1 text-sm"
+          >
+            {showAddContact ? "Cancel" : "+ Add Contact"}
+          </button>
+        </div>
+
+        {showAddContact ? (
+          <div className="mb-4 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <input
+                value={newContact.fullName}
+                onChange={(event) => setNewContact((prev) => ({ ...prev, fullName: event.target.value }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Full name *"
+              />
+              <input
+                value={newContact.title}
+                onChange={(event) => setNewContact((prev) => ({ ...prev, title: event.target.value }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Title (e.g. Director of Operations)"
+              />
+              <input
+                value={newContact.department}
+                onChange={(event) => setNewContact((prev) => ({ ...prev, department: event.target.value }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Department"
+              />
+              <input
+                value={newContact.email}
+                onChange={(event) => setNewContact((prev) => ({ ...prev, email: event.target.value }))}
+                type="email"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Email"
+              />
+              <input
+                value={newContact.phone}
+                onChange={(event) => setNewContact((prev) => ({ ...prev, phone: event.target.value }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Phone"
+              />
+              <input
+                value={newContact.linkedinUrl}
+                onChange={(event) => setNewContact((prev) => ({ ...prev, linkedinUrl: event.target.value }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="LinkedIn URL"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(createContact, "Contact added.")}
+              className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+            >
+              Save Contact
+            </button>
+          </div>
+        ) : null}
+
         <ul className="space-y-2">
           {contacts.map((contact) => (
             <li key={contact.id} className="relative rounded-md border border-slate-200 px-3 py-2">
@@ -754,18 +886,37 @@ export function AccountRecordEditableCards({
                   <p className="mt-1 text-xs text-slate-500">
                     Due: {task.dueAt ? formatDate(task.dueAt) : "-"}
                   </p>
-                  <button
-                    type="button"
-                    className="mt-2 rounded-md border border-slate-300 px-2 py-1 text-xs"
-                    onClick={() => {
-                      setEditingTaskId(task.id);
-                      setEditingTaskTitle(task.title);
-                      setEditingTaskNotes(task.notes ?? "");
-                      setEditingTaskDueAt(task.dueAt ? toInputDate(task.dueAt) : "");
-                    }}
-                  >
-                    Edit
-                  </button>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={`rounded-md border px-2 py-1 text-xs disabled:opacity-60 ${
+                        task.status === "DONE"
+                          ? "border-slate-300 text-slate-600"
+                          : "border-emerald-300 bg-emerald-50 text-emerald-700"
+                      }`}
+                      onClick={() =>
+                        run(
+                          () => toggleTaskStatus(task.id, task.status),
+                          task.status === "DONE" ? "Task reopened." : "Task marked complete.",
+                        )
+                      }
+                    >
+                      {task.status === "DONE" ? "Reopen" : "Mark Done"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                      onClick={() => {
+                        setEditingTaskId(task.id);
+                        setEditingTaskTitle(task.title);
+                        setEditingTaskNotes(task.notes ?? "");
+                        setEditingTaskDueAt(task.dueAt ? toInputDate(task.dueAt) : "");
+                      }}
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </>
               )}
             </li>

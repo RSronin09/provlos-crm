@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ContactRecordActions } from "@/components/crm/contact-record-actions";
+import { ContactTaskList } from "@/components/crm/contact-task-list";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
-import { TaskListCard } from "@/components/crm/ui/task-list-card";
 import { ActivityFeed } from "@/components/crm/ui/activity-feed";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
@@ -65,7 +65,7 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
             />
           </section>
 
-          <TaskListCard
+          <ContactTaskList
             title="Tasks"
             tasks={contact.tasks.map((task) => ({
               id: task.id,

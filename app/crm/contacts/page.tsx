@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreateContactModal } from "@/components/crm/create-contact-modal";
 import { DataTable } from "@/components/crm/ui/data-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
@@ -45,7 +46,11 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Contacts" subtitle="Decision makers and stakeholders associated with accounts." />
+      <PageHeader
+        title="Contacts"
+        subtitle="Decision makers and stakeholders associated with accounts."
+        actions={<CreateContactModal />}
+      />
 
       <FilterBar>
         <SearchInput

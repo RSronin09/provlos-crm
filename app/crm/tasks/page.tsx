@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
+import { CreateTaskModal } from "@/components/crm/create-task-modal";
+import { TaskStatusToggle } from "@/components/crm/task-status-toggle";
 import { DataTable } from "@/components/crm/ui/data-table";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
@@ -58,7 +60,11 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Tasks" subtitle="Track follow-up work across accounts and contacts." />
+      <PageHeader
+        title="Tasks"
+        subtitle="Track follow-up work across accounts and contacts."
+        actions={<CreateTaskModal />}
+      />
 
       <FilterBar>
         <select
@@ -83,7 +89,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         </button>
       </FilterBar>
 
-      <DataTable headers={["Task Title", "Account", "Contact", "Due Date", "Status", "Notes Preview"]}>
+      <DataTable headers={["Task Title", "Account", "Contact", "Due Date", "Status", "Notes Preview", "Actions"]}>
         {tasks.map((task) => {
           const parsed = parseTaskPayload(task.type, task.notes);
           return (
@@ -100,6 +106,9 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
               <TaskTimelineBadge dueAt={task.dueAt} status={task.status} />
             </td>
             <td className="px-4 py-3">{parsed.body?.slice(0, 90) ?? "-"}</td>
+            <td className="px-4 py-3">
+              <TaskStatusToggle taskId={task.id} status={task.status} />
+            </td>
           </tr>
         )})}
       </DataTable>

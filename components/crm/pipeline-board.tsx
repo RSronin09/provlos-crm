@@ -166,6 +166,25 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
                       ? new Date(account.lastActivityAt).toISOString().slice(0, 10)
                       : "-"}
                   </p>
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const target = event.target.value as PipelineStage;
+                      if (!target) return;
+                      setDraggedId(account.id);
+                      onDrop(target);
+                      event.target.value = "";
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                    className="mt-2 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"
+                  >
+                    <option value="">Move to stage...</option>
+                    {STAGES.filter((s) => s !== renderStage(account.stage)).map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </article>
               ))}
               {!byStage[stage].length ? (

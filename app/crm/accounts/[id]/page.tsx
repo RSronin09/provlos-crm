@@ -1,7 +1,5 @@
-import { AccountDetailActions } from "@/components/crm/account-detail-actions";
 import { AccountDeliveriesCard } from "@/components/crm/account-deliveries-card";
 import { AccountRecordEditableCards } from "@/components/crm/account-record-editable-cards";
-import { AccountRecordHeaderActions } from "@/components/crm/account-record-header-actions";
 import { EnrichButton } from "@/components/crm/enrich-button";
 import { RelationshipTypeFields } from "@/components/crm/relationship-type-fields";
 import { DetailTabs } from "@/components/crm/ui/detail-tabs";
@@ -80,9 +78,6 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
             <StageBadge stage={account.stage} accountType={account.accountType} />
             <StatusBadge value={account.priorityScore ? `PRIORITY ${account.priorityScore}` : "PRIORITY N/A"} />
           </>
-        }
-        actions={
-          <AccountRecordHeaderActions accountId={account.id} initialNotes={account.notes ?? ""} />
         }
       />
 
@@ -212,7 +207,6 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
             accountId={account.id}
             accountName={account.companyName}
           />
-          <AccountDetailActions accountId={account.id} initialNotes={account.notes ?? ""} />
         </div>
       </div>
     </div>
