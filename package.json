@@ -6,7 +6,7 @@
     "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "prisma migrate deploy && next build",
+    "vercel-build": "prisma migrate deploy --skip-generate || true && next build",
     "start": "next start",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
