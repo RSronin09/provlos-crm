@@ -118,6 +118,8 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
                 "Unnamed contact",
               subtitle: contact.title ?? null,
               meta: `${contact.email ?? "No email"} | ${contact.phone ?? "No phone"}`,
+              hasEmail: !!contact.email,
+              hasPhone: !!contact.phone,
             }))}
             activities={account.activities.map((activity) => ({
               id: activity.id,

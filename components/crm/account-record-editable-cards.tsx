@@ -1,5 +1,6 @@
 "use client";
 
+import { EnrichContactButton } from "@/components/crm/enrich-contact-button";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -26,6 +27,8 @@ type EditableContact = {
   title: string;
   subtitle: string | null;
   meta: string | null;
+  hasEmail?: boolean;
+  hasPhone?: boolean;
 };
 
 type AccountRecordEditableCardsProps = {
@@ -506,6 +509,11 @@ export function AccountRecordEditableCards({
               <p className="text-sm font-medium">{contact.title}</p>
               {contact.subtitle ? <p className="text-sm text-slate-600">{contact.subtitle}</p> : null}
               {contact.meta ? <p className="text-xs text-slate-500">{contact.meta}</p> : null}
+              <EnrichContactButton
+                contactId={contact.id}
+                hasEmail={!!contact.hasEmail}
+                hasPhone={!!contact.hasPhone}
+              />
             </li>
           ))}
           {!contacts.length ? (

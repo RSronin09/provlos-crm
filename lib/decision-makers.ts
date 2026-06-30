@@ -446,6 +446,95 @@ async function searchContactsFromHunter(domain: string | null) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Apollo person-level match — enriches a single known contact by name
+// ---------------------------------------------------------------------------
+
+export type ApolloContactMatch = {
+  email: string | null;
+  phone: string | null;
+  linkedinUrl: string | null;
+  title: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  fullName: string | null;
+  confidenceScore: number;
+};
+
+export async function enrichContactByName(input: {
+  firstName: string | null;
+  lastName: string | null;
+  fullName?: string | null;
+  organizationName: string;
+  domain?: string | null;
+  linkedinUrl?: string | null;
+}): Promise<ApolloContactMatch | null> {
+  const apiKey = process.env.APOLLO_API_KEY;
+  if (!apiKey) return null;
+
+  // Build the best possible match payload
+  const body: Record<string, unknown> = {
+    organization_name: input.organizationName,
+    reveal_personal_emails: false,
+    reveal_phone_number: true,
+  };
+
+  // LinkedIn URL is the strongest signal — use it if available
+  if (input.linkedinUrl) {
+    body.linkedin_url = input.linkedinUrl;
+  } else {
+    // Name-based match — split fullName if firstName/lastName not available
+    const nameParts = (!input.firstName && input.fullName)
+      ? input.fullName.trim().split(/\s+/)
+      : null;
+
+    body.first_name = input.firstName || nameParts?.[0] || null;
+    body.last_name =
+      input.lastName ||
+      (nameParts && nameParts.length > 1 ? nameParts.slice(1).join(" ") : null);
+  }
+
+  if (input.domain) body.domain = input.domain;
+
+  try {
+    const response = await fetch("https://api.apollo.io/api/v1/people/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apiKey,
+        "Cache-Control": "no-cache",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as { person?: ApolloEnrichedPerson };
+    const person = payload.person;
+    if (!person) return null;
+
+    const primaryPhone =
+      person.phone_numbers?.find((p) => p.type === "work_direct")?.raw_number ??
+      person.phone_numbers?.[0]?.raw_number ??
+      null;
+
+    return {
+      email: person.email ?? null,
+      phone: primaryPhone,
+      linkedinUrl: person.linkedin_url ?? null,
+      title: person.title ?? null,
+      firstName: person.first_name ?? null,
+      lastName: person.last_name ?? null,
+      fullName: person.name ?? null,
+      confidenceScore: person.email ? 0.95 : 0.70,
+    };
+  } catch {
+    return null;
+  }
+}
+
+
 export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOutput> {
   const providersUsed: string[] = [];
   const resolvedWebsite = await resolveWebsite(input.companyName, input.website);

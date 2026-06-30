@@ -1,8 +1,12 @@
 import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { lookupDecisionMakers } from "@/lib/decision-makers";
+import { lookupDecisionMakers, enrichContactByName } from "@/lib/decision-makers";
 import { NextRequest } from "next/server";
+
+// How many existing contacts (with no email) to attempt Apollo person-match on.
+// Each costs 1 Apollo credit.
+const MAX_CONTACT_MATCHES = 10;
 
 export async function POST(request: NextRequest) {
   if (!isAdminRequest(request)) {
@@ -18,81 +22,124 @@ export async function POST(request: NextRequest) {
 
   const account = await db.account.findUnique({
     where: { id: accountId },
-    select: { id: true, companyName: true, website: true },
+    select: {
+      id: true,
+      companyName: true,
+      website: true,
+      contacts: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          linkedinUrl: true,
+          title: true,
+          department: true,
+          confidenceScore: true,
+        },
+      },
+    },
   });
 
   if (!account) {
     return Response.json({ error: "Account not found" }, { status: 404 });
   }
 
-  try {
-    const { contacts, resolvedWebsite, providersUsed } = await lookupDecisionMakers({
-      companyName: account.companyName,
-      website: account.website,
+  const domain = account.website
+    ? (() => {
+        try {
+          const url = account.website.startsWith("http")
+            ? account.website
+            : `https://${account.website}`;
+          return new URL(url).hostname.replace(/^www\./, "");
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+
+  let added = 0;
+  let updated = 0;
+  const providersUsed = new Set<string>();
+
+  // -----------------------------------------------------------------------
+  // Phase 1: Per-contact Apollo people/match for existing contacts
+  // that are missing email or phone. This is the most targeted approach
+  // and directly resolves "No email | No phone" on known contacts.
+  // -----------------------------------------------------------------------
+  const contactsNeedingEnrichment = account.contacts
+    .filter((c) => !c.email || !c.phone)
+    .slice(0, MAX_CONTACT_MATCHES);
+
+  for (const contact of contactsNeedingEnrichment) {
+    const match = await enrichContactByName({
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      fullName: contact.fullName,
+      organizationName: account.companyName,
+      domain,
+      linkedinUrl: contact.linkedinUrl,
     });
 
-    let added = 0;
-    let updated = 0;
+    if (!match) continue;
 
-    for (const contact of contacts) {
+    const hasNewData =
+      (!contact.email && match.email) ||
+      (!contact.phone && match.phone) ||
+      (!contact.linkedinUrl && match.linkedinUrl);
+
+    if (hasNewData) {
+      await db.contact.update({
+        where: { id: contact.id },
+        data: {
+          email: contact.email ?? match.email ?? undefined,
+          phone: contact.phone ?? match.phone ?? undefined,
+          linkedinUrl: contact.linkedinUrl ?? match.linkedinUrl ?? undefined,
+          title: contact.title ?? match.title ?? undefined,
+          firstName: contact.firstName ?? match.firstName ?? undefined,
+          lastName: contact.lastName ?? match.lastName ?? undefined,
+          confidenceScore: Math.max(contact.confidenceScore ?? 0, match.confidenceScore),
+          source: "apollo_enriched",
+          lastVerifiedAt: new Date(),
+        },
+      });
+      updated++;
+      providersUsed.add("apollo");
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Phase 2: Company-level discovery — find NEW people at this company
+  // that are not yet in our contacts list.
+  // -----------------------------------------------------------------------
+  try {
+    const { contacts: discovered, resolvedWebsite, providersUsed: usedProviders } =
+      await lookupDecisionMakers({
+        companyName: account.companyName,
+        website: account.website,
+      });
+
+    usedProviders.forEach((p) => providersUsed.add(p));
+
+    const existingEmails = new Set(
+      account.contacts.map((c) => c.email?.toLowerCase()).filter(Boolean),
+    );
+    const existingNames = new Set(
+      account.contacts.map((c) => c.fullName?.toLowerCase()).filter(Boolean),
+    );
+
+    for (const contact of discovered) {
       const fullName =
         contact.fullName ||
         [contact.firstName, contact.lastName].filter(Boolean).join(" ");
       if (!fullName) continue;
 
-      // Look for existing contact by email match first, then by name
-      const existingByEmail = contact.email
-        ? await db.contact.findFirst({
-            where: {
-              accountId: account.id,
-              email: { equals: contact.email, mode: "insensitive" },
-            },
-          })
-        : null;
+      // Skip if we already have this person (by email or name)
+      if (contact.email && existingEmails.has(contact.email.toLowerCase())) continue;
+      if (existingNames.has(fullName.toLowerCase())) continue;
 
-      const existingByName = await db.contact.findFirst({
-        where: {
-          accountId: account.id,
-          fullName: { equals: fullName, mode: "insensitive" },
-        },
-      });
-
-      const existing = existingByEmail ?? existingByName;
-
-      if (existing) {
-        // Update the existing contact if Apollo found new email/phone/linkedin
-        // that wasn't there before — this is the key fix for existing contacts
-        const needsUpdate =
-          (!existing.email && contact.email) ||
-          (!existing.phone && contact.phone) ||
-          (!existing.linkedinUrl && contact.linkedinUrl) ||
-          (!existing.title && contact.title);
-
-        if (needsUpdate) {
-          await db.contact.update({
-            where: { id: existing.id },
-            data: {
-              email: existing.email ?? contact.email ?? undefined,
-              phone: existing.phone ?? contact.phone ?? undefined,
-              linkedinUrl: existing.linkedinUrl ?? contact.linkedinUrl ?? undefined,
-              title: existing.title ?? contact.title ?? undefined,
-              department: existing.department ?? contact.department ?? undefined,
-              firstName: existing.firstName ?? contact.firstName ?? undefined,
-              lastName: existing.lastName ?? contact.lastName ?? undefined,
-              confidenceScore: Math.max(
-                existing.confidenceScore ?? 0,
-                contact.confidenceScore ?? 0,
-              ),
-              source: contact.source ?? existing.source ?? undefined,
-              lastVerifiedAt: new Date(),
-            },
-          });
-          updated++;
-        }
-        continue;
-      }
-
-      // Brand new contact — create it
       await db.contact.create({
         data: {
           accountId: account.id,
@@ -110,32 +157,29 @@ export async function POST(request: NextRequest) {
         },
       });
       added++;
+      existingNames.add(fullName.toLowerCase());
     }
 
-    // Update account website if we resolved a better one
+    // Update account website if resolved
     if (resolvedWebsite && !account.website) {
       await db.account.update({
         where: { id: account.id },
         data: { website: resolvedWebsite },
       });
     }
-
-    return Response.json({
-      data: {
-        accountId: account.id,
-        companyName: account.companyName,
-        contactsAdded: added,
-        contactsUpdated: updated,
-        totalContacts: contacts.length,
-        providersUsed,
-        resolvedWebsite,
-      },
-      message: `Enrichment complete: ${added} new contacts added, ${updated} existing contacts updated for ${account.companyName}.`,
-    });
-  } catch (err) {
-    return Response.json(
-      { error: "Enrichment failed", details: err instanceof Error ? err.message : "Unknown error" },
-      { status: 500 },
-    );
+  } catch {
+    // Phase 2 is non-fatal — Phase 1 results are already saved
   }
+
+  return Response.json({
+    data: {
+      accountId: account.id,
+      companyName: account.companyName,
+      contactsAdded: added,
+      contactsUpdated: updated,
+      totalProcessed: contactsNeedingEnrichment.length,
+      providersUsed: [...providersUsed],
+    },
+    message: `Enrichment complete: ${updated} contacts updated with email/phone, ${added} new contacts found for ${account.companyName}.`,
+  });
 }
