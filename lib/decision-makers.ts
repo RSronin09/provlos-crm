@@ -526,9 +526,11 @@ export async function enrichContactByName(input: {
   const lastName = cleaned.lastName ?? input.lastName;
   if (!firstName && !input.linkedinUrl) return null;
 
-  // ---- Try Apollo first ----
+  // ---- Try Apollo first (requires paid plan for people/match) ----
   const apolloKey = process.env.APOLLO_API_KEY;
-  if (apolloKey) {
+  const apolloPlanEnabled = process.env.APOLLO_PLAN_ENABLED === "true";
+
+  if (apolloKey && apolloPlanEnabled) {
     const body: Record<string, unknown> = {
       organization_name: input.organizationName,
       reveal_personal_emails: false,
