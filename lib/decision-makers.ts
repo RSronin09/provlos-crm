@@ -625,7 +625,7 @@ async function enrichContactFromPDL(input: {
 
   try {
     const params = new URLSearchParams();
-    params.set("min_likelihood", "0.6");
+    params.set("min_likelihood", "6"); // PDL uses 0–10 integer scale
 
     if (input.linkedinUrl) {
       params.set("profile", input.linkedinUrl.replace(/^https?:\/\//, ""));

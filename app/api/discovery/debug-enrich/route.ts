@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
   // --- PDL test ---
   if (process.env.PDL_API_KEY && looksLikePerson && !isTitleNotName) {
     const pdlParams = new URLSearchParams();
-    pdlParams.set("min_likelihood", "0.6");
+    pdlParams.set("min_likelihood", "6"); // PDL uses 0–10 integer scale
     if (contact.linkedinUrl) {
       pdlParams.set("profile", contact.linkedinUrl.replace(/^https?:\/\//, ""));
     } else {
