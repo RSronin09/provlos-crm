@@ -16,23 +16,28 @@ export function ContactTaskList({ title, tasks: initialTasks }: { title: string;
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function toggleStatus(taskId: string, currentStatus: string) {
     const nextStatus = currentStatus === "DONE" ? "OPEN" : "DONE";
     setBusyId(taskId);
+    setError(null);
     try {
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       });
-      if (!response.ok) throw new Error("Failed to update task");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? "Failed to update task.");
+      }
       setTasks((prev) =>
         prev.map((task) => (task.id === taskId ? { ...task, status: nextStatus } : task)),
       );
       router.refresh();
-    } catch {
-      // Silently ignore — UI stays in previous state
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update task.");
     } finally {
       setBusyId(null);
     }
@@ -41,6 +46,11 @@ export function ContactTaskList({ title, tasks: initialTasks }: { title: string;
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <h3 className="mb-3 text-lg font-semibold">{title}</h3>
+      {error ? (
+        <p className="mb-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {error}
+        </p>
+      ) : null}
       {!tasks.length ? (
         <EmptyState title="No tasks" description="Create follow-ups and outreach reminders here." />
       ) : (

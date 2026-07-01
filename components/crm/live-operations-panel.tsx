@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { LiveMap } from "./live-map";
 import type { DriverPin, DeliveryPin } from "./live-map-inner";
-import { useAutoRefresh } from "@/lib/use-auto-refresh";
 
 export interface LiveDriver {
   id: string;
