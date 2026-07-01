@@ -19,11 +19,11 @@ export function EnrichAccountRowButton({ accountId }: { accountId: string }) {
         body: JSON.stringify({ accountId }),
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setStatus("error");
-        setSummary("Failed");
+        setSummary(json.error ?? "Failed");
         return;
       }
 
@@ -34,7 +34,7 @@ export function EnrichAccountRowButton({ accountId }: { accountId: string }) {
       setSummary(total > 0 ? `+${total}` : "No new data");
     } catch {
       setStatus("error");
-      setSummary("Error");
+      setSummary("Network error");
     }
   };
 
@@ -58,7 +58,7 @@ export function EnrichAccountRowButton({ accountId }: { accountId: string }) {
   }
 
   if (status === "error") {
-    return <span className="text-xs text-red-500">{summary}</span>;
+    return <span className="text-xs text-red-500" title={summary ?? ""}>{summary}</span>;
   }
 
   return (

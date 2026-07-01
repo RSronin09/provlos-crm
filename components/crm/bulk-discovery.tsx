@@ -66,10 +66,14 @@ export function BulkDiscovery() {
       const params = new URLSearchParams({ pageSize: "40" });
       if (statusFilter) params.set("status", statusFilter);
       const response = await fetch(`/api/discovery/candidates?${params}`);
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage({ type: "error", text: payload.error ?? "Failed to load candidates." });
+        return;
+      }
       setCandidates(payload.data ?? []);
     } catch {
-      setCandidates([]);
+      setMessage({ type: "error", text: "Network error while loading candidates." });
     } finally {
       setLoadingCandidates(false);
     }
@@ -117,7 +121,9 @@ export function BulkDiscovery() {
       setMessage({ type: "info", text: "Processing discovery job… this may take a few seconds." });
       const result = await authPost("/api/discovery/process-next");
       const msg = result.message ?? "Discovery job processed.";
-      setMessage({ type: "success", text: msg });
+      const resultCount: number | undefined = result.data?.resultCount;
+      const noCandidatesCreated = resultCount === undefined || resultCount === 0;
+      setMessage({ type: noCandidatesCreated ? "info" : "success", text: msg });
       setStatusFilter("NEW");
       await fetchCandidates();
     } catch (error) {
@@ -130,9 +136,16 @@ export function BulkDiscovery() {
   async function promoteCandidate(candidateId: string, companyName: string) {
     try {
       setActionLoading(true);
-      await authPost(`/api/discovery/candidates/${candidateId}/promote`);
+      const payload = await authPost(`/api/discovery/candidates/${candidateId}/promote`);
+      const account = payload.data?.account as { id: string; companyName: string } | undefined;
       setMessage({ type: "success", text: `Promoted "${companyName}" to Account.` });
-      setCandidates((prev) => prev.map((c) => c.id === candidateId ? { ...c, status: "PROMOTED" } : c));
+      setCandidates((prev) =>
+        prev.map((c) =>
+          c.id === candidateId
+            ? { ...c, status: "PROMOTED", account: account ?? c.account }
+            : c,
+        ),
+      );
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
     } finally {
@@ -146,6 +159,19 @@ export function BulkDiscovery() {
       await authPatch(`/api/discovery/candidates/${candidateId}`, { status: "REJECTED" });
       setMessage({ type: "success", text: `Rejected "${companyName}".` });
       setCandidates((prev) => prev.map((c) => c.id === candidateId ? { ...c, status: "REJECTED" } : c));
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function markReviewed(candidateId: string, companyName: string) {
+    try {
+      setActionLoading(true);
+      await authPatch(`/api/discovery/candidates/${candidateId}`, { status: "REVIEWED" });
+      setMessage({ type: "success", text: `Marked "${companyName}" as reviewed.` });
+      setCandidates((prev) => prev.map((c) => c.id === candidateId ? { ...c, status: "REVIEWED" } : c));
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
     } finally {
@@ -319,6 +345,16 @@ export function BulkDiscovery() {
                   </div>
                   {candidate.status === "NEW" || candidate.status === "REVIEWED" ? (
                     <div className="flex shrink-0 gap-2">
+                      {candidate.status === "NEW" ? (
+                        <button
+                          type="button"
+                          onClick={() => markReviewed(candidate.id, candidate.companyName)}
+                          disabled={actionLoading}
+                          className="rounded-md border border-amber-300 px-3 py-1.5 text-xs text-amber-700 disabled:opacity-60 hover:bg-amber-50 transition-colors"
+                        >
+                          Mark Reviewed
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => promoteCandidate(candidate.id, candidate.companyName)}

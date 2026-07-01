@@ -194,19 +194,38 @@ export function BulkEnrichPanel({
                     </div>
                   )}
 
-                  {state === "done" && (
-                    <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center gap-3">
-                      <svg className="h-5 w-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <div>
-                        <p className="text-sm font-semibold text-green-800">Enrichment complete</p>
-                        <p className="text-xs text-green-700">
-                          {totalAdded} new decision-maker contact{totalAdded !== 1 ? "s" : ""} added across {targets.length} {entityLabel}.
-                        </p>
+                  {state === "done" && (() => {
+                    const errorCount = rows.filter((r) => r.status === "error").length;
+                    const hasErrors = errorCount > 0;
+                    return (
+                      <div
+                        className={`rounded-lg border px-4 py-3 flex items-center gap-3 ${
+                          hasErrors
+                            ? "bg-amber-50 border-amber-200"
+                            : "bg-green-50 border-green-200"
+                        }`}
+                      >
+                        {hasErrors ? (
+                          <svg className="h-5 w-5 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                        <div>
+                          <p className={`text-sm font-semibold ${hasErrors ? "text-amber-800" : "text-green-800"}`}>
+                            {hasErrors ? "Enrichment finished with errors" : "Enrichment complete"}
+                          </p>
+                          <p className={`text-xs ${hasErrors ? "text-amber-700" : "text-green-700"}`}>
+                            {totalAdded} new decision-maker contact{totalAdded !== 1 ? "s" : ""} added across {targets.length} {entityLabel}
+                            {hasErrors ? `, ${errorCount} failed.` : "."}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Per-account results */}
                   <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 max-h-52 overflow-y-auto">

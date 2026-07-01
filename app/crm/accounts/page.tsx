@@ -9,7 +9,7 @@ import { SearchInput } from "@/components/crm/ui/search-input";
 import { StageBadge } from "@/components/crm/ui/stage-badge";
 
 type AccountsPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     search?: string;
     industry?: string;
     stage?: AccountStage;
@@ -17,11 +17,11 @@ type AccountsPageProps = {
     region?: string;
     sort?: string;
     direction?: "asc" | "desc";
-  };
+  }>;
 };
 
 export default async function AccountsPage({ searchParams }: AccountsPageProps) {
-  const filters = searchParams ?? {};
+  const filters = (await searchParams) ?? {};
   const sort = filters.sort ?? "updatedAt";
   const direction = filters.direction === "asc" ? "asc" : "desc";
 

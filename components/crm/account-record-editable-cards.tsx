@@ -74,6 +74,7 @@ export function AccountRecordEditableCards({
 }: AccountRecordEditableCardsProps) {
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(null);
+  const [statusIsError, setStatusIsError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const [editingOverview, setEditingOverview] = useState(false);
@@ -151,10 +152,12 @@ export function AccountRecordEditableCards({
     try {
       setBusy(true);
       setStatus(null);
+      setStatusIsError(false);
       await action();
       setStatus(successMessage);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unknown error");
+      setStatusIsError(true);
     } finally {
       setBusy(false);
     }
@@ -162,10 +165,16 @@ export function AccountRecordEditableCards({
 
   async function saveOverview() {
     const priority = overviewForm.priorityScore.trim();
+    // The website field requires a fully-qualified URL server-side. Most users
+    // type "example.com" without a protocol, so normalize it here rather than
+    // rejecting a perfectly reasonable input with a confusing validation error.
+    const rawWebsite = overviewForm.website.trim();
+    const website = rawWebsite && !/^https?:\/\//i.test(rawWebsite) ? `https://${rawWebsite}` : rawWebsite;
+
     await request(`/api/accounts/${accountId}`, "PATCH", {
       industry: overviewForm.industry || null,
       orgType: overviewForm.orgType || null,
-      website: overviewForm.website || null,
+      website: website || null,
       phone: overviewForm.phone || null,
       city: overviewForm.city || null,
       state: overviewForm.state || null,
@@ -521,7 +530,22 @@ export function AccountRecordEditableCards({
           <h3 className="text-lg font-semibold">Overview</h3>
           <button
             type="button"
-            onClick={() => setEditingOverview((prev) => !prev)}
+            onClick={() => {
+              if (editingOverview) {
+                // Cancel: discard any unsaved edits and revert to last saved values
+                setOverviewForm({
+                  industry: account.industry ?? "",
+                  orgType: account.orgType ?? "",
+                  website: account.website ?? "",
+                  phone: account.phone ?? "",
+                  city: account.city ?? "",
+                  state: account.state ?? "",
+                  region: account.region ?? "",
+                  priorityScore: account.priorityScore?.toString() ?? "",
+                });
+              }
+              setEditingOverview((prev) => !prev);
+            }}
             className="rounded-md border border-slate-300 px-3 py-1 text-sm"
           >
             {editingOverview ? "Cancel" : "Edit"}
@@ -1128,7 +1152,13 @@ export function AccountRecordEditableCards({
       </section>
 
       {status ? (
-        <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+        <p
+          className={`rounded-md border px-3 py-2 text-sm shadow-sm ${
+            statusIsError
+              ? "border-rose-300 bg-rose-50 text-rose-700"
+              : "border-emerald-300 bg-emerald-50 text-emerald-700"
+          }`}
+        >
           {status}
         </p>
       ) : null}

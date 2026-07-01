@@ -304,7 +304,7 @@ export default async function DashboardPage() {
               label: "Active",
               value: activeDeliveries,
               color: "text-blue-700",
-              href: "/crm/deliveries?openOnly=true",
+              href: "/crm/deliveries/all?openOnly=true",
             },
             {
               label: "Unassigned",

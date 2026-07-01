@@ -1,6 +1,7 @@
 "use client";
 
 import { StageBadge } from "@/components/crm/ui/stage-badge";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type Stage =
@@ -155,7 +156,13 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
                   onDragEnd={() => setDraggedId(null)}
                   className="cursor-grab rounded-md border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100 active:cursor-grabbing"
                 >
-                  <p className="text-sm font-medium">{account.companyName}</p>
+                  <Link
+                    href={`/crm/accounts/${account.id}`}
+                    onClick={(event) => event.stopPropagation()}
+                    className="text-sm font-medium text-slate-800 hover:text-blue-700 hover:underline"
+                  >
+                    {account.companyName}
+                  </Link>
                   <p className="text-xs text-slate-600">{account.industry ?? "No industry"}</p>
                   <p className="mt-1 text-xs text-slate-500">
                     Priority: {account.priorityScore ?? "-"} | Contacts: {account.contactsCount}

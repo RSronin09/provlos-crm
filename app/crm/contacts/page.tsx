@@ -9,14 +9,14 @@ import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 
 type ContactsPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     search?: string;
     accountId?: string;
-  };
+  }>;
 };
 
 export default async function ContactsPage({ searchParams }: ContactsPageProps) {
-  const filters = searchParams ?? {};
+  const filters = (await searchParams) ?? {};
 
   let contacts: Prisma.ContactGetPayload<{ include: { account: true } }>[] = [];
   let dbWarning: string | null = null;

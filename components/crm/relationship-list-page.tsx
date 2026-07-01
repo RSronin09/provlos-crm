@@ -87,6 +87,11 @@ export async function RelationshipListPage({
     ? typeConfig.description
     : "All companies, vendors, banks, suppliers, and partners — unified view.";
 
+  const basePath = fixedType ? `/crm/relationships/${TYPE_SLUG[fixedType]}` : "/crm/relationships";
+  const hasActiveFilters = Boolean(
+    filters.search || filters.industry || filters.stage || filters.state || filters.region,
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -211,6 +216,12 @@ export async function RelationshipListPage({
           Apply
         </button>
       </FilterBar>
+
+      {hasActiveFilters ? (
+        <Link href={basePath} className="inline-block text-xs text-blue-700 hover:underline">
+          Clear filters
+        </Link>
+      ) : null}
 
       <DataTable
         headers={

@@ -12,18 +12,22 @@ export async function AccountDeliveriesCard({
   accountId,
   accountName,
 }: AccountDeliveriesCardProps) {
-  const deliveries = await db.delivery.findMany({
-    where: { customerId: accountId },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-    include: {
-      assignedDriver: { select: { name: true } },
-    },
-  });
-
-  const openCount = deliveries.filter(
-    (d) => d.status !== "delivered" && d.status !== "cancelled"
-  ).length;
+  const [deliveries, openCount] = await Promise.all([
+    db.delivery.findMany({
+      where: { customerId: accountId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: {
+        assignedDriver: { select: { name: true } },
+      },
+    }),
+    db.delivery.count({
+      where: {
+        customerId: accountId,
+        status: { notIn: ["delivered", "cancelled"] },
+      },
+    }),
+  ]);
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">

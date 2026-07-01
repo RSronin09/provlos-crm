@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 // ---------------------------------------------------------------------------
@@ -63,8 +63,8 @@ function autoDetectMapping(headers: string[]): Partial<Record<MappedField, strin
 
   for (const [field, candidates] of Object.entries(COLUMN_MATCHERS) as [MappedField, string[]][]) {
     for (const candidate of candidates) {
-      const idx = lower.findIndex((h) => !used.has(headers[h.indexOf(h)]) && (h === candidate || h.includes(candidate)));
-      if (idx !== -1 && !used.has(headers[idx])) {
+      const idx = lower.findIndex((h, i) => !used.has(headers[i]) && (h === candidate || h.includes(candidate)));
+      if (idx !== -1) {
         result[field] = headers[idx];
         used.add(headers[idx]);
         break;
@@ -100,12 +100,10 @@ export function SpreadsheetImport() {
   const [fileName, setFileName] = useState<string | null>(null);
 
   // Persist admin token across sessions
-  useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("crm_admin_token");
-      if (stored) setAdminToken(stored);
-    }
-  });
+  useEffect(() => {
+    const stored = localStorage.getItem("crm_admin_token");
+    if (stored) setAdminToken(stored);
+  }, []);
 
   const handleTokenChange = (val: string) => {
     setAdminToken(val);
@@ -216,7 +214,7 @@ export function SpreadsheetImport() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`,
+          "x-admin-token": adminToken,
         },
         body: JSON.stringify({ rows: mappedRows, autoEnrich }),
       });
@@ -425,14 +423,41 @@ export function SpreadsheetImport() {
       )}
 
       {/* Result */}
-      {result && (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-5 space-y-3">
+      {result && (() => {
+        const nothingImported = result.created === 0 && result.contactsCreated === 0;
+        const hasErrors = result.errors.length > 0;
+        const isFailure = nothingImported && hasErrors;
+        const isPartial = nothingImported && !hasErrors && result.skipped > 0;
+        const colors = isFailure
+          ? { border: "border-red-200", bg: "bg-red-50", icon: "text-red-600", title: "text-red-800" }
+          : isPartial
+            ? { border: "border-amber-200", bg: "bg-amber-50", icon: "text-amber-600", title: "text-amber-800" }
+            : { border: "border-green-200", bg: "bg-green-50", icon: "text-green-600", title: "text-green-800" };
+        const heading = isFailure
+          ? "Import Failed"
+          : isPartial
+            ? "Nothing New to Import"
+            : "Import Complete";
+
+        return (
+        <div className={`rounded-xl border ${colors.border} ${colors.bg} p-5 space-y-3`}>
           <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <h3 className="text-sm font-semibold text-green-800">Import Complete</h3>
+            {isFailure ? (
+              <svg className={`h-5 w-5 ${colors.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className={`h-5 w-5 ${colors.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            <h3 className={`text-sm font-semibold ${colors.title}`}>{heading}</h3>
           </div>
+          {isPartial && (
+            <p className="text-xs text-amber-700">
+              All {result.skipped} row{result.skipped !== 1 ? "s" : ""} matched companies already in the CRM. No new accounts were created.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
@@ -485,20 +510,23 @@ export function SpreadsheetImport() {
             </div>
           )}
 
-          <p className="text-xs text-green-700">
-            Go to{" "}
-            <a href="/crm/relationships/customers" className="underline hover:text-green-900">
-              Customers
-            </a>{" "}
-            or{" "}
-            <a href="/crm/pipeline" className="underline hover:text-green-900">
-              Pipeline
-            </a>{" "}
-            to see your imported leads. Each account has an{" "}
-            <strong>Enrich</strong> button to fetch decision makers on demand.
-          </p>
+          {!isFailure && (
+            <p className="text-xs text-green-700">
+              Go to{" "}
+              <a href="/crm/relationships/customers" className="underline hover:text-green-900">
+                Customers
+              </a>{" "}
+              or{" "}
+              <a href="/crm/pipeline" className="underline hover:text-green-900">
+                Pipeline
+              </a>{" "}
+              to see your imported leads. Each account has an{" "}
+              <strong>Enrich</strong> button to fetch decision makers on demand.
+            </p>
+          )}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

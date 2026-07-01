@@ -9,12 +9,13 @@ import { SearchInput } from "@/components/crm/ui/search-input";
 import Link from "next/link";
 
 type TasksPageProps = {
-  searchParams?: { view?: "all" | "open" | "today" | "overdue" | "completed"; search?: string };
+  searchParams?: Promise<{ view?: "all" | "open" | "today" | "overdue" | "completed"; search?: string }>;
 };
 
 export default async function TasksPage({ searchParams }: TasksPageProps) {
-  const view = searchParams?.view ?? "all";
-  const search = searchParams?.search ?? "";
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const view = resolvedSearchParams.view ?? "all";
+  const search = resolvedSearchParams.search ?? "";
   const now = new Date();
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
