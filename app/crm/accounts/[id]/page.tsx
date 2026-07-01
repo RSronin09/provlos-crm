@@ -115,6 +115,15 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               meta: `${contact.email ?? "No email"} | ${contact.phone ?? "No phone"}`,
               hasEmail: !!contact.email,
               hasPhone: !!contact.phone,
+              fullName:
+                contact.fullName ||
+                `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
+                null,
+              contactTitle: contact.title,
+              department: contact.department,
+              email: contact.email,
+              phone: contact.phone,
+              linkedinUrl: contact.linkedinUrl,
             }))}
             activities={account.activities.map((activity) => ({
               id: activity.id,

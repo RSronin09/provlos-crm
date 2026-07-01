@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ContactRecordActions } from "@/components/crm/contact-record-actions";
 import { ContactTaskList } from "@/components/crm/contact-task-list";
+import { EditablePersonInfo } from "@/components/crm/editable-person-info";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { ActivityFeed } from "@/components/crm/ui/activity-feed";
@@ -41,17 +42,17 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 className="mb-3 text-lg font-semibold">Person Info</h3>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <Field label="Email" value={contact.email} />
-              <Field label="Phone" value={contact.phone} />
-              <Field label="Department" value={contact.department} />
-              <Field label="LinkedIn" value={contact.linkedinUrl} />
-              <Field label="Confidence" value={contact.confidenceScore?.toFixed(2)} />
-              <Field label="Source" value={contact.source} />
-            </dl>
-          </section>
+          <EditablePersonInfo
+            contactId={contact.id}
+            fullName={fullName}
+            title={contact.title}
+            email={contact.email}
+            phone={contact.phone}
+            department={contact.department}
+            linkedinUrl={contact.linkedinUrl}
+            confidenceScore={contact.confidenceScore}
+            source={contact.source}
+          />
 
           <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="mb-3 text-lg font-semibold">Outreach History</h3>
@@ -100,15 +101,6 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
           </RightRailCard>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="font-medium">{value || "-"}</dd>
     </div>
   );
 }

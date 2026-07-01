@@ -29,6 +29,12 @@ type EditableContact = {
   meta: string | null;
   hasEmail?: boolean;
   hasPhone?: boolean;
+  fullName: string | null;
+  contactTitle: string | null;
+  department: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedinUrl: string | null;
 };
 
 type AccountRecordEditableCardsProps = {
@@ -86,6 +92,15 @@ export function AccountRecordEditableCards({
   const [contacts, setContacts] = useState(initialContacts);
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContact, setNewContact] = useState({
+    fullName: "",
+    title: "",
+    department: "",
+    email: "",
+    phone: "",
+    linkedinUrl: "",
+  });
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editContactForm, setEditContactForm] = useState({
     fullName: "",
     title: "",
     department: "",
@@ -373,8 +388,10 @@ export function AccountRecordEditableCards({
       firstName: string | null;
       lastName: string | null;
       title: string | null;
+      department: string | null;
       email: string | null;
       phone: string | null;
+      linkedinUrl: string | null;
     };
 
     setContacts((prev) => [
@@ -385,11 +402,94 @@ export function AccountRecordEditableCards({
         meta: `${created.email ?? "No email"} | ${created.phone ?? "No phone"}`,
         hasEmail: !!created.email,
         hasPhone: !!created.phone,
+        fullName: created.fullName,
+        contactTitle: created.title,
+        department: created.department,
+        email: created.email,
+        phone: created.phone,
+        linkedinUrl: created.linkedinUrl,
       },
       ...prev,
     ]);
     setNewContact({ fullName: "", title: "", department: "", email: "", phone: "", linkedinUrl: "" });
     setShowAddContact(false);
+    router.refresh();
+  }
+
+  function startEditContact(contact: EditableContact) {
+    setEditingContactId(contact.id);
+    setEditContactForm({
+      fullName: contact.fullName ?? "",
+      title: contact.contactTitle ?? "",
+      department: contact.department ?? "",
+      email: contact.email ?? "",
+      phone: contact.phone ?? "",
+      linkedinUrl: contact.linkedinUrl ?? "",
+    });
+    setShowAddContact(false);
+  }
+
+  async function saveEditContact(contactId: string) {
+    const fullName = editContactForm.fullName.trim();
+    if (!fullName) {
+      throw new Error("Contact name is required.");
+    }
+
+    const email = editContactForm.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Enter a valid email address.");
+    }
+
+    const linkedinUrl = editContactForm.linkedinUrl.trim();
+    if (linkedinUrl && !/^https?:\/\//i.test(linkedinUrl)) {
+      throw new Error("LinkedIn URL must start with http:// or https://");
+    }
+
+    const payload = await request(`/api/contacts/${contactId}`, "PATCH", {
+      fullName,
+      title: editContactForm.title.trim() || null,
+      department: editContactForm.department.trim() || null,
+      email: email || null,
+      phone: editContactForm.phone.trim() || null,
+      linkedinUrl: linkedinUrl || null,
+    });
+
+    const updated = payload.data as {
+      id: string;
+      fullName: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      title: string | null;
+      department: string | null;
+      email: string | null;
+      phone: string | null;
+      linkedinUrl: string | null;
+    };
+
+    setContacts((prev) =>
+      prev.map((contact) =>
+        contact.id === contactId
+          ? {
+              id: updated.id,
+              title:
+                updated.fullName ||
+                `${updated.firstName ?? ""} ${updated.lastName ?? ""}`.trim() ||
+                "Unnamed contact",
+              subtitle: updated.title ?? null,
+              meta: `${updated.email ?? "No email"} | ${updated.phone ?? "No phone"}`,
+              hasEmail: !!updated.email,
+              hasPhone: !!updated.phone,
+              fullName: updated.fullName,
+              contactTitle: updated.title,
+              department: updated.department,
+              email: updated.email,
+              phone: updated.phone,
+              linkedinUrl: updated.linkedinUrl,
+            }
+          : contact,
+      ),
+    );
+    setEditingContactId(null);
     router.refresh();
   }
 
@@ -624,30 +724,120 @@ export function AccountRecordEditableCards({
         ) : null}
 
         <ul className="space-y-2">
-          {contacts.map((contact) => (
-            <li key={contact.id} className="relative rounded-md border border-slate-200 px-3 py-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (!window.confirm("Delete this contact?")) return;
-                  run(() => deleteContact(contact.id), "Contact deleted.");
-                }}
-                className="absolute right-2 top-2 rounded-md border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 disabled:opacity-50"
-                title="Delete contact"
-              >
-                ×
-              </button>
-              <p className="text-sm font-medium">{contact.title}</p>
-              {contact.subtitle ? <p className="text-sm text-slate-600">{contact.subtitle}</p> : null}
-              {contact.meta ? <p className="text-xs text-slate-500">{contact.meta}</p> : null}
-              <EnrichContactButton
-                contactId={contact.id}
-                hasEmail={!!contact.hasEmail}
-                hasPhone={!!contact.hasPhone}
-              />
-            </li>
-          ))}
+          {contacts.map((contact) => {
+            const isEditing = editingContactId === contact.id;
+            return (
+              <li key={contact.id} className="relative rounded-md border border-slate-200 px-3 py-2">
+                {!isEditing ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!window.confirm("Delete this contact?")) return;
+                      run(() => deleteContact(contact.id), "Contact deleted.");
+                    }}
+                    className="absolute right-2 top-2 rounded-md border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 disabled:opacity-50"
+                    title="Delete contact"
+                  >
+                    ×
+                  </button>
+                ) : null}
+
+                {isEditing ? (
+                  <div className="space-y-2 pr-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <input
+                        value={editContactForm.fullName}
+                        onChange={(event) =>
+                          setEditContactForm((prev) => ({ ...prev, fullName: event.target.value }))
+                        }
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Full name *"
+                      />
+                      <input
+                        value={editContactForm.title}
+                        onChange={(event) =>
+                          setEditContactForm((prev) => ({ ...prev, title: event.target.value }))
+                        }
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Title"
+                      />
+                      <input
+                        value={editContactForm.department}
+                        onChange={(event) =>
+                          setEditContactForm((prev) => ({ ...prev, department: event.target.value }))
+                        }
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Department"
+                      />
+                      <input
+                        value={editContactForm.email}
+                        onChange={(event) =>
+                          setEditContactForm((prev) => ({ ...prev, email: event.target.value }))
+                        }
+                        type="email"
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Email"
+                      />
+                      <input
+                        value={editContactForm.phone}
+                        onChange={(event) =>
+                          setEditContactForm((prev) => ({ ...prev, phone: event.target.value }))
+                        }
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="Phone"
+                      />
+                      <input
+                        value={editContactForm.linkedinUrl}
+                        onChange={(event) =>
+                          setEditContactForm((prev) => ({ ...prev, linkedinUrl: event.target.value }))
+                        }
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="LinkedIn URL"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => run(() => saveEditContact(contact.id), "Contact updated.")}
+                        className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingContactId(null)}
+                        className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium">{contact.title}</p>
+                    {contact.subtitle ? <p className="text-sm text-slate-600">{contact.subtitle}</p> : null}
+                    {contact.meta ? <p className="text-xs text-slate-500">{contact.meta}</p> : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEditContact(contact)}
+                        className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                      >
+                        Edit
+                      </button>
+                      <EnrichContactButton
+                        contactId={contact.id}
+                        hasEmail={!!contact.hasEmail}
+                        hasPhone={!!contact.hasPhone}
+                      />
+                    </div>
+                  </>
+                )}
+              </li>
+            );
+          })}
           {!contacts.length ? (
             <li className="rounded-md border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-500">
               No contacts found.
