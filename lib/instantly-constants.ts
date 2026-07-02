@@ -68,7 +68,10 @@ export type InstantlyLevel = (typeof INSTANTLY_LEVELS)[number];
 
 /** Cities within each Florida county we've been asked to target. SuperSearch's
  *  location filter doesn't support counties directly, so we expand a county
- *  into its constituent cities. Add more counties/cities here as needed — no
+ *  into its constituent cities. This list is just a set of convenience
+ *  presets — it is NOT the only way to target a location. The search panel
+ *  also accepts arbitrary custom city/state entries, so you're never limited
+ *  to only what's listed here. Add more counties/cities below as needed — no
  *  Google Places API key required for this form of the filter.
  *
  *  For tighter precision later, a `place_id` (Google Maps Place ID for the
@@ -77,6 +80,17 @@ export type InstantlyLevel = (typeof INSTANTLY_LEVELS)[number];
 export const FLORIDA_COUNTY_CITIES: Record<string, string[]> = {
   "Lee County, FL": ["Fort Myers", "Cape Coral", "Bonita Springs", "Estero", "Lehigh Acres", "Sanibel"],
   "Sarasota County, FL": ["Sarasota", "Venice", "North Port", "Englewood", "Osprey", "Nokomis"],
+  "Charlotte County, FL": ["Punta Gorda", "Port Charlotte", "Englewood"],
+  "Collier County, FL": ["Naples", "Marco Island", "Immokalee"],
+  "Manatee County, FL": ["Bradenton", "Palmetto", "Lakewood Ranch"],
+  "Hillsborough County, FL": ["Tampa", "Brandon", "Plant City", "Riverview"],
+  "Pinellas County, FL": ["St. Petersburg", "Clearwater", "Largo", "Pinellas Park"],
+  "Polk County, FL": ["Lakeland", "Winter Haven", "Bartow"],
+  "Orange County, FL": ["Orlando", "Winter Park", "Apopka"],
+  "Duval County, FL": ["Jacksonville", "Jacksonville Beach"],
+  "Miami-Dade County, FL": ["Miami", "Hialeah", "Homestead", "Coral Gables"],
+  "Broward County, FL": ["Fort Lauderdale", "Hollywood", "Pembroke Pines", "Coral Springs"],
+  "Palm Beach County, FL": ["West Palm Beach", "Boca Raton", "Delray Beach", "Boynton Beach"],
 };
 
 /** Job titles worth targeting at healthcare/senior-living facilities —

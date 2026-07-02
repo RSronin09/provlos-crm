@@ -238,11 +238,21 @@ export const instantlySearchFiltersSchema = z.object({
   show_one_lead_per_company: z.boolean().optional(),
 });
 
+const instantlyCustomLocationSchema = z.object({
+  city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+});
+
 export const instantlyCountSchema = z.object({
   counties: z.array(z.string()).optional(),
-  keywords: z.array(z.string()).optional(),
+  customLocations: z.array(instantlyCustomLocationSchema).optional(),
+  // Single literal phrase — Instantly's keyword_filter does NOT parse "OR"/"AND".
+  keyword: z.string().optional().nullable(),
   titles: z.array(z.string()).optional(),
   employeeCount: z.array(z.string()).optional(),
+  locationMode: z.enum(["contact", "company"]).optional(),
+  useSubIndustry: z.boolean().optional(),
   filters: instantlySearchFiltersSchema.optional(),
 });
 

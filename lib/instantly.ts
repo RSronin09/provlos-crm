@@ -12,7 +12,6 @@
 
 import {
   FLORIDA_COUNTY_CITIES,
-  HEALTHCARE_FACILITY_KEYWORDS,
   HEALTHCARE_FACILITY_TITLES,
   INSTANTLY_HEALTHCARE_SUB_INDUSTRIES,
   type InstantlyEmployeeCountBracket,
@@ -260,28 +259,50 @@ export async function listLeadsInList(
 // ---------------------------------------------------------------------------
 
 export function buildHealthcareCountySearchFilters(options: {
-  counties: string[];
-  keywords?: string[];
+  /** Named presets from FLORIDA_COUNTY_CITIES, e.g. "Lee County, FL". Unknown
+   *  labels are NOT silently dropped — pass them via `customLocations` instead
+   *  so a typo doesn't quietly narrow your search to nothing. */
+  counties?: string[];
+  /** Arbitrary city/state pairs — use this for any county/city not in the
+   *  FLORIDA_COUNTY_CITIES preset list. This is what makes the search NOT
+   *  limited to only the two originally-configured counties. */
+  customLocations?: { city?: string; state?: string; country?: string }[];
+  /** A SINGLE keyword/phrase. Instantly's `keyword_filter.include` matches
+   *  this as one literal phrase — it does NOT parse "OR"/"AND" boolean
+   *  syntax. Passing multiple comma-joined terms here will silently match
+   *  zero results, so this deliberately only accepts one string. Leave
+   *  unset to rely on industry + subIndustry + title targeting instead. */
+  keyword?: string | null;
   titles?: string[];
   employeeCount?: InstantlyEmployeeCountBracket[];
   locationMode?: "contact" | "company";
+  /** Sub-industry narrows results further within Healthcare — turn this off
+   *  if a search is unexpectedly returning zero matches, since it's the
+   *  most likely filter to be too narrow for smaller/less-categorized
+   *  facilities that Instantly hasn't tagged with a sub-industry at all. */
+  useSubIndustry?: boolean;
 }): InstantlySearchFilters {
-  const locations: InstantlyLocation[] = options.counties.flatMap((county) => {
+  const countyLocations: InstantlyLocation[] = (options.counties ?? []).flatMap((county) => {
     const cities = FLORIDA_COUNTY_CITIES[county];
-    if (!cities) {
-      // Unknown county label — fall back to treating it as a plain state/city string.
-      return [{ city: county, state: "Florida", country: "United States" } satisfies InstantlyLocation];
-    }
+    if (!cities) return [];
     return cities.map((city) => ({ city, state: "Florida", country: "United States" }) satisfies InstantlyLocation);
   });
 
+  const customLocations: InstantlyLocation[] = (options.customLocations ?? [])
+    .filter((loc) => loc.city || loc.state || loc.country)
+    .map((loc) => ({ city: loc.city, state: loc.state, country: loc.country ?? "United States" }) satisfies InstantlyLocation);
+
+  const locations = [...countyLocations, ...customLocations];
+
   return {
-    locations,
-    location_mode: options.locationMode ?? "company",
+    ...(locations.length ? { locations } : {}),
+    location_mode: options.locationMode ?? "contact",
     industry: { include: ["Healthcare, Pharmaceuticals, & Biotech"] },
-    subIndustry: { include: [...INSTANTLY_HEALTHCARE_SUB_INDUSTRIES] },
+    ...(options.useSubIndustry === false
+      ? {}
+      : { subIndustry: { include: [...INSTANTLY_HEALTHCARE_SUB_INDUSTRIES] } }),
     title: { include: options.titles ?? HEALTHCARE_FACILITY_TITLES },
-    keyword_filter: { include: (options.keywords ?? HEALTHCARE_FACILITY_KEYWORDS).join(" OR ") },
+    ...(options.keyword?.trim() ? { keyword_filter: { include: options.keyword.trim() } } : {}),
     employeeCount: options.employeeCount,
     show_one_lead_per_company: true,
     skip_owned_leads: true,
@@ -301,23 +322,30 @@ export function describePreviewLead(lead: InstantlyPreviewLead): string {
   return parts.join(" — ");
 }
 
-/** Resolves the convenience { counties, keywords, titles, employeeCount }
- *  request shape used by the discovery API routes into full search filters,
- *  falling back to a caller-supplied raw `filters` object if provided. */
+/** Resolves the convenience request shape used by the discovery API routes
+ *  into full search filters, falling back to a caller-supplied raw `filters`
+ *  object if provided. Not limited to the FLORIDA_COUNTY_CITIES presets —
+ *  pass `customLocations` for any city/state/county not in that list. */
 export function resolveSearchFilters(input: {
   counties?: string[];
-  keywords?: string[];
+  customLocations?: { city?: string; state?: string; country?: string }[];
+  keyword?: string | null;
   titles?: string[];
   employeeCount?: string[];
+  locationMode?: "contact" | "company";
+  useSubIndustry?: boolean;
   filters?: InstantlySearchFilters;
 }): InstantlySearchFilters {
   if (input.filters) return input.filters;
 
   return buildHealthcareCountySearchFilters({
-    counties: input.counties?.length ? input.counties : Object.keys(FLORIDA_COUNTY_CITIES),
-    keywords: input.keywords,
+    counties: input.counties,
+    customLocations: input.customLocations,
+    keyword: input.keyword,
     titles: input.titles,
     employeeCount: input.employeeCount as InstantlyEmployeeCountBracket[] | undefined,
+    locationMode: input.locationMode,
+    useSubIndustry: input.useSubIndustry,
   });
 }
 

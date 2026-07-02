@@ -12,19 +12,28 @@ const ADMIN_TOKEN_KEY = "crm_admin_token";
 
 const COUNTY_OPTIONS = Object.keys(FLORIDA_COUNTY_CITIES);
 
+type CustomLocation = { city: string; state: string };
+
 type Message = { type: "success" | "error" | "info"; text: string } | null;
 
 export function InstantlySearchPanel() {
   const [adminToken, setAdminToken] = useState("");
-  const [counties, setCounties] = useState<string[]>(COUNTY_OPTIONS);
-  const [keywords, setKeywords] = useState(HEALTHCARE_FACILITY_KEYWORDS.join(", "));
+  const [counties, setCounties] = useState<string[]>(["Lee County, FL", "Sarasota County, FL"]);
+  const [customLocations, setCustomLocations] = useState<CustomLocation[]>([]);
+  const [customCity, setCustomCity] = useState("");
+  const [customState, setCustomState] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [titles, setTitles] = useState(HEALTHCARE_FACILITY_TITLES.join(", "));
   const [employeeCount, setEmployeeCount] = useState<string[]>([]);
+  const [locationMode, setLocationMode] = useState<"contact" | "company">("contact");
+  const [useSubIndustry, setUseSubIndustry] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [limit, setLimit] = useState(50);
   const [listId, setListId] = useState("");
   const [resourceId, setResourceId] = useState<string | null>(null);
 
   const [matchCount, setMatchCount] = useState<number | null>(null);
+  const [lastFilters, setLastFilters] = useState<unknown>(null);
   const [busy, setBusy] = useState<"count" | "search" | "import" | null>(null);
   const [message, setMessage] = useState<Message>(null);
 
@@ -47,12 +56,29 @@ export function InstantlySearchPanel() {
     setEmployeeCount((prev) => (prev.includes(bracket) ? prev.filter((b) => b !== bracket) : [...prev, bracket]));
   }
 
+  function addCustomLocation() {
+    if (!customCity.trim() && !customState.trim()) return;
+    setCustomLocations((prev) => [...prev, { city: customCity.trim(), state: customState.trim() }]);
+    setCustomCity("");
+    setCustomState("");
+  }
+
+  function removeCustomLocation(index: number) {
+    setCustomLocations((prev) => prev.filter((_, i) => i !== index));
+  }
+
   function buildRequestBody() {
     return {
       counties,
-      keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
+      customLocations: customLocations.length ? customLocations : undefined,
+      // Deliberately a single string, not an array — see lib/instantly.ts
+      // buildHealthcareCountySearchFilters for why joining multiple terms
+      // with "OR" silently returns zero matches.
+      keyword: keyword.trim() || undefined,
       titles: titles.split(",").map((t) => t.trim()).filter(Boolean),
       employeeCount: employeeCount.length ? employeeCount : undefined,
+      locationMode,
+      useSubIndustry,
     };
   }
 
@@ -77,7 +103,18 @@ export function InstantlySearchPanel() {
       setMessage({ type: "info", text: "Checking how many leads match…" });
       const payload = await authPost("/api/discovery/instantly/count", buildRequestBody());
       setMatchCount(payload.data?.count ?? 0);
-      setMessage({ type: "success", text: `${payload.data?.count ?? 0} leads match this search.` });
+      setLastFilters(payload.data?.filters ?? null);
+      const count = payload.data?.count ?? 0;
+      setMessage(
+        count === 0
+          ? {
+              type: "info",
+              text:
+                "0 leads match — try unchecking \"Narrow by health sub-category\" below, removing the keyword " +
+                "phrase, or widening the counties/cities. Expand \"Filters sent to Instantly\" to see exactly what was searched.",
+            }
+          : { type: "success", text: `${count} leads match this search.` },
+      );
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
     } finally {
@@ -95,6 +132,7 @@ export function InstantlySearchPanel() {
       setMessage({ type: "info", text: "Starting enrichment in Instantly…" });
       const payload = await authPost("/api/discovery/instantly/search", { ...buildRequestBody(), limit });
       setResourceId(payload.data?.resourceId ?? null);
+      setLastFilters(payload.data?.filters ?? null);
       if (payload.data?.resourceId) setListId(payload.data.resourceId);
       setMessage({ type: "success", text: payload.message ?? "Enrichment started." });
     } catch (error) {
@@ -138,8 +176,8 @@ export function InstantlySearchPanel() {
           <h3 className="font-semibold text-slate-800">Instantly Lead Finder</h3>
           <p className="text-sm text-slate-500 mt-0.5">
             Search Instantly&apos;s 450M+ verified B2B contact database by industry, job title, and location, then
-            pull matching leads straight into the CRM. Pre-configured for healthcare/senior-living facilities in Lee
-            &amp; Sarasota County, FL — adjust any field below for other searches.
+            pull matching leads straight into the CRM. Pre-configured for healthcare/senior-living facilities —
+            add any county/city below, it&apos;s not limited to the two presets.
           </p>
         </div>
 
@@ -155,7 +193,9 @@ export function InstantlySearchPanel() {
         </label>
 
         <div>
-          <span className="mb-1 block text-sm font-medium text-slate-700">Counties</span>
+          <span className="mb-1 block text-sm font-medium text-slate-700">
+            Counties (presets — check any combination)
+          </span>
           <div className="flex flex-wrap gap-3">
             {COUNTY_OPTIONS.map((county) => (
               <label key={county} className="flex items-center gap-1.5 text-sm text-slate-600">
@@ -165,30 +205,78 @@ export function InstantlySearchPanel() {
             ))}
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Expands each county into its major cities for the location filter (no Google Places key required).
+            Expands each county into its major cities for the location filter (no Google Places key required). Don&apos;t
+            see a county you need? Add any city/county below instead.
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm block">
-            <span className="mb-1 block font-medium text-slate-700">Facility keywords (comma-separated)</span>
-            <textarea
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+        <div>
+          <span className="mb-1 block text-sm font-medium text-slate-700">Add a custom city/county</span>
+          <div className="flex flex-wrap items-end gap-2">
+            <input
+              type="text"
+              value={customCity}
+              onChange={(e) => setCustomCity(e.target.value)}
+              placeholder="City (e.g. Naples)"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
             />
-          </label>
-          <label className="text-sm block">
-            <span className="mb-1 block font-medium text-slate-700">Target job titles (comma-separated)</span>
-            <textarea
-              value={titles}
-              onChange={(e) => setTitles(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+            <input
+              type="text"
+              value={customState}
+              onChange={(e) => setCustomState(e.target.value)}
+              placeholder="State (e.g. Florida)"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
             />
-          </label>
+            <button
+              type="button"
+              onClick={addCustomLocation}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 transition-colors"
+            >
+              + Add location
+            </button>
+          </div>
+          {customLocations.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {customLocations.map((loc, i) => (
+                <span
+                  key={`${loc.city}-${loc.state}-${i}`}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                >
+                  {[loc.city, loc.state].filter(Boolean).join(", ")}
+                  <button type="button" onClick={() => removeCustomLocation(i)} className="text-slate-400 hover:text-slate-700">
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
+
+        <label className="text-sm block">
+          <span className="mb-1 block font-medium text-slate-700">Keyword phrase (optional)</span>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder={`e.g. "${HEALTHCARE_FACILITY_KEYWORDS[0]}" — one phrase only, matched literally`}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            Instantly matches this as one literal phrase — it does not support combining multiple terms with
+            &quot;OR&quot;. Leave blank to rely on industry + job title targeting instead (usually the better default).
+            Ideas: {HEALTHCARE_FACILITY_KEYWORDS.join(", ")}.
+          </p>
+        </label>
+
+        <label className="text-sm block">
+          <span className="mb-1 block font-medium text-slate-700">Target job titles (comma-separated)</span>
+          <textarea
+            value={titles}
+            onChange={(e) => setTitles(e.target.value)}
+            rows={2}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+          />
+        </label>
 
         <div>
           <span className="mb-1 block text-sm font-medium text-slate-700">Employee count (optional)</span>
@@ -204,6 +292,43 @@ export function InstantlySearchPanel() {
               </label>
             ))}
           </div>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((prev) => !prev)}
+            className="text-xs font-medium text-blue-700 hover:underline"
+          >
+            {showAdvanced ? "Hide" : "Show"} advanced options (useful if matches are stuck at zero)
+          </button>
+          {showAdvanced ? (
+            <div className="mt-3 space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={useSubIndustry}
+                  onChange={(e) => setUseSubIndustry(e.target.checked)}
+                />
+                Narrow by health sub-category (Hospital &amp; Health Care, Medical Practice, etc.)
+              </label>
+              <p className="text-xs text-slate-400 -mt-2">
+                Uncheck this first if a search returns 0 — many smaller facilities aren&apos;t tagged with a
+                sub-category at all, so this filter can be too strict.
+              </p>
+              <label className="text-sm block">
+                <span className="mb-1 block font-medium text-slate-700">Location match mode</span>
+                <select
+                  value={locationMode}
+                  onChange={(e) => setLocationMode(e.target.value as "contact" | "company")}
+                  className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="contact">Contact&apos;s own location (default, usually better coverage)</option>
+                  <option value="company">Company HQ location</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
@@ -241,6 +366,15 @@ export function InstantlySearchPanel() {
             <span className="text-sm text-slate-500">~{matchCount} leads match</span>
           ) : null}
         </div>
+
+        {lastFilters ? (
+          <details className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-xs font-medium text-slate-600">
+              Filters sent to Instantly (for debugging)
+            </summary>
+            <pre className="mt-2 overflow-x-auto text-xs text-slate-600">{JSON.stringify(lastFilters, null, 2)}</pre>
+          </details>
+        ) : null}
 
         <p className="text-xs text-slate-400">
           Requires <code className="bg-slate-100 px-1 py-0.5 rounded">INSTANTLY_API_KEY</code> to be set on the
