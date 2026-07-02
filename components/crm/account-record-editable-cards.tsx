@@ -2,6 +2,7 @@
 
 import { EnrichContactButton } from "@/components/crm/enrich-contact-button";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -840,7 +841,12 @@ export function AccountRecordEditableCards({
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm font-medium">{contact.title}</p>
+                    <Link
+                      href={`/crm/contacts/${contact.id}`}
+                      className="text-sm font-medium text-blue-700 hover:underline"
+                    >
+                      {contact.title}
+                    </Link>
                     {contact.subtitle ? <p className="text-sm text-slate-600">{contact.subtitle}</p> : null}
                     {contact.meta ? <p className="text-xs text-slate-500">{contact.meta}</p> : null}
                     <div className="mt-2 flex flex-wrap items-center gap-2">

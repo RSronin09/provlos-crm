@@ -49,6 +49,8 @@ export function AddRelationshipForm() {
     creditLimit: "",
     contractStart: "",
     contractEnd: "",
+    whatTheyMove: "",
+    whyHireCouriers: "",
   });
 
   useEffect(() => {
@@ -89,6 +91,8 @@ export function AddRelationshipForm() {
         creditLimit: form.creditLimit ? Number(form.creditLimit) : null,
         contractStart: form.contractStart || null,
         contractEnd: form.contractEnd || null,
+        whatTheyMove: form.whatTheyMove || null,
+        whyHireCouriers: form.whyHireCouriers || null,
       };
 
       const response = await fetch("/api/accounts", {
@@ -130,7 +134,7 @@ export function AddRelationshipForm() {
             value={adminToken}
             onChange={(e) => handleTokenChange(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none"
-            required
+            placeholder="Stored in browser after first entry"
           />
         </label>
       </div>
@@ -190,6 +194,10 @@ export function AddRelationshipForm() {
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-slate-700">Industry</span>
             <input type="text" {...field("industry")} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-700">Org Type</span>
+            <input type="text" {...field("orgType")} placeholder="LLC, Hospital, Non-profit, etc." className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-slate-700">Website</span>

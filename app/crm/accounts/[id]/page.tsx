@@ -11,6 +11,7 @@ import { AccountTypeBadge } from "@/components/crm/ui/account-type-badge";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
 import { db } from "@/lib/db";
 import { getTypeConfig } from "@/lib/account-types";
+import { withHttpProtocol } from "@/lib/format";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -155,6 +156,8 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               creditLimit: account.creditLimit,
               contractStart: account.contractStart?.toISOString() ?? null,
               contractEnd: account.contractEnd?.toISOString() ?? null,
+              whatTheyMove: account.whatTheyMove,
+              whyHireCouriers: account.whyHireCouriers,
             }}
           />
           <RightRailCard title="Account Details">
@@ -184,8 +187,8 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               <Link href="/crm/relationships" className="text-blue-700 hover:underline">
                 All Relationships
               </Link>
-              <Link href="/crm/contacts" className="text-blue-700 hover:underline">
-                All Contacts
+              <Link href={`/crm/contacts?accountId=${account.id}`} className="text-blue-700 hover:underline">
+                Contacts for this account
               </Link>
               <Link href="/crm/tasks?view=open" className="text-blue-700 hover:underline">
                 Open Tasks
@@ -195,8 +198,13 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
                   Pipeline Board
                 </Link>
               ) : null}
+              {account.accountType === "CUSTOMER" ? (
+                <Link href="#deliveries" className="text-blue-700 hover:underline">
+                  Deliveries for this account
+                </Link>
+              ) : null}
               {account.website ? (
-                <a href={account.website} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
+                <a href={withHttpProtocol(account.website)} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
                   Website
                 </a>
               ) : (
@@ -212,10 +220,12 @@ export default async function AccountDetailPage({ params }: AccountDetailPagePro
               </a>
             </div>
           </RightRailCard>
-          <AccountDeliveriesCard
-            accountId={account.id}
-            accountName={account.companyName}
-          />
+          {account.accountType === "CUSTOMER" ? (
+            <AccountDeliveriesCard
+              accountId={account.id}
+              accountName={account.companyName}
+            />
+          ) : null}
         </div>
       </div>
     </div>
