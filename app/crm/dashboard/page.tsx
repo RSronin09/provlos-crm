@@ -34,28 +34,9 @@ const STATUS_COLOR: Record<string, string> = {
 export default async function DashboardPage() {
   const now = new Date();
 
-  const [
-    totalAccounts,
-    contactsFound,
-    openTasks,
-    accountsByStage,
-    accountsByType,
-    recentActivities,
-    upcomingTasks,
-    highPriorityTargets,
-    // Enrichment coverage
-    accountsWithContacts,
-    enrichedContacts,
-    importedContacts,
-    // Delivery metrics
-    activeDeliveries,
-    overdueDeliveries,
-    openIssues,
-    unassignedDeliveries,
-    todayDelivered,
-    recentDeliveryActivity,
-    inProgressDeliveries,
-  ] = await Promise.all([
+  let dashboardData;
+  try {
+    dashboardData = await Promise.all([
     db.account.count(),
     db.contact.count(),
     db.task.count({ where: { status: "OPEN" } }),
@@ -141,7 +122,43 @@ export default async function DashboardPage() {
       orderBy: { requestedDeliveryDateTime: "asc" },
       take: 6,
     }),
-  ]);
+    ]);
+  } catch {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Dashboard"
+          subtitle="Operational snapshot across relationships, discovery, and deliveries."
+        />
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Database is unreachable. Check `DATABASE_URL` and run migrations.
+        </p>
+      </div>
+    );
+  }
+
+  const [
+    totalAccounts,
+    contactsFound,
+    openTasks,
+    accountsByStage,
+    accountsByType,
+    recentActivities,
+    upcomingTasks,
+    highPriorityTargets,
+    // Enrichment coverage
+    accountsWithContacts,
+    enrichedContacts,
+    importedContacts,
+    // Delivery metrics
+    activeDeliveries,
+    overdueDeliveries,
+    openIssues,
+    unassignedDeliveries,
+    todayDelivered,
+    recentDeliveryActivity,
+    inProgressDeliveries,
+  ] = dashboardData;
 
   return (
     <div className="space-y-6">
@@ -328,7 +345,7 @@ export default async function DashboardPage() {
               label: "Delivered Today",
               value: todayDelivered,
               color: "text-emerald-700",
-              href: "/crm/deliveries/all",
+              href: "/crm/deliveries/all?deliveredToday=true",
             },
           ].map((k) => (
             <Link
@@ -450,19 +467,6 @@ export default async function DashboardPage() {
             emptyMessage: "No staged accounts yet.",
           },
           {
-            id: "upcoming-tasks",
-            label: "Upcoming Tasks",
-            value: upcomingTasks.length,
-            items: upcomingTasks.map((task) => ({
-              title: task.account.companyName,
-              subtitle: `${task.type}${task.contact?.fullName ? ` - ${task.contact.fullName}` : ""}`,
-              meta: task.dueAt ? `Due ${task.dueAt.toISOString().slice(0, 10)}` : "No due date",
-              href: "/crm/tasks",
-              badge: task.status,
-            })),
-            emptyMessage: "No upcoming tasks.",
-          },
-          {
             id: "high-priority-targets",
             label: "High priority targets",
             value: highPriorityTargets.length,
@@ -473,18 +477,6 @@ export default async function DashboardPage() {
               badge: account.stage,
             })),
             emptyMessage: "No high priority targets yet.",
-          },
-          {
-            id: "recent-activity",
-            label: "Recent Activity",
-            value: recentActivities.length,
-            items: recentActivities.map((activity) => ({
-              title: activity.account.companyName,
-              subtitle: activity.type,
-              meta: activity.occurredAt.toISOString().slice(0, 16).replace("T", " "),
-              href: `/crm/accounts/${activity.accountId}`,
-            })),
-            emptyMessage: "No recent activity yet.",
           },
         ]}
       />
@@ -503,16 +495,33 @@ export default async function DashboardPage() {
         </section>
 
         <div className="space-y-4">
-          <RightRailCard title="Upcoming Tasks">
+          <RightRailCard
+            title="Upcoming Tasks"
+            action={
+              <Link href="/crm/tasks?view=open" className="text-xs text-blue-700 hover:underline">
+                All tasks →
+              </Link>
+            }
+          >
             <ul className="space-y-2 text-sm">
               {upcomingTasks.map((task) => (
-                <li key={task.id} className="rounded-md border border-slate-200 px-3 py-2">
-                  <p className="font-medium">{task.account.companyName}</p>
-                  <p className="text-slate-600">
-                    {task.type} {task.dueAt ? `- due ${task.dueAt.toISOString().slice(0, 10)}` : ""}
-                  </p>
+                <li key={task.id}>
+                  <Link
+                    href={`/crm/accounts/${task.accountId}#tasks`}
+                    className="block rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                  >
+                    <p className="font-medium text-slate-800">{task.account.companyName}</p>
+                    <p className="text-slate-600">
+                      {task.type}
+                      {task.contact?.fullName ? ` · ${task.contact.fullName}` : ""}
+                      {task.dueAt ? ` · due ${task.dueAt.toISOString().slice(0, 10)}` : ""}
+                    </p>
+                  </Link>
                 </li>
               ))}
+              {upcomingTasks.length === 0 ? (
+                <li className="text-sm text-slate-400">No upcoming tasks.</li>
+              ) : null}
             </ul>
           </RightRailCard>
         </div>
