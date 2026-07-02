@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const hunterKey = process.env.HUNTER_API_KEY;
   const apolloKey = process.env.APOLLO_API_KEY;
   const pdlKey = process.env.PDL_API_KEY;
+  const instantlyKey = process.env.INSTANTLY_API_KEY;
   const dbUrl = process.env.DATABASE_URL;
   const adminToken = process.env.ADMIN_TOKEN;
 
@@ -56,6 +57,7 @@ export default function SettingsPage() {
           <KeyStatus name="PDL_API_KEY" value={pdlKey} />
           <KeyStatus name="SERPER_API_KEY" value={serperKey} />
           <KeyStatus name="HUNTER_API_KEY" value={hunterKey} />
+          <KeyStatus name="INSTANTLY_API_KEY" value={instantlyKey} />
           <KeyStatus name="ADMIN_TOKEN" value={adminToken} />
         </div>
       </div>
@@ -105,6 +107,32 @@ export default function SettingsPage() {
               className="inline-flex items-center gap-1 rounded-md border border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
             >
               Get Hunter.io API key →
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Instantly Lead Finder readiness */}
+      {!instantlyKey && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <h3 className="text-sm font-semibold text-amber-800 mb-1">
+            Instantly Lead Finder not configured
+          </h3>
+          <p className="text-sm text-amber-700">
+            The scaffolding for Instantly&apos;s SuperSearch lead database (see{" "}
+            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">/crm/discovery</code>{" "}
+            → &quot;Instantly Lead Finder&quot; tab) is wired up and ready — set{" "}
+            <code className="font-mono text-xs bg-amber-100 px-1 py-0.5 rounded">INSTANTLY_API_KEY</code>{" "}
+            to turn it on.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href="https://app.instantly.ai/app/settings/integrations"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-800"
+            >
+              Get Instantly API key →
             </a>
           </div>
         </div>
