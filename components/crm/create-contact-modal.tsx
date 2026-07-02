@@ -155,15 +155,18 @@ export function CreateContactModal() {
                   <div className="relative">
                     <input
                       value={accountQuery}
-                      onChange={(event) => setAccountQuery(event.target.value)}
+                      onChange={(event) => {
+                        setAccountQuery(event.target.value);
+                        if (event.target.value.trim()) setSearching(true);
+                      }}
                       className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                       placeholder="Search company name..."
                     />
-                    {accountQuery.trim() && (accountOptions.length > 0 || searching) ? (
+                    {accountQuery.trim() ? (
                       <div className="absolute z-10 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-48 overflow-y-auto">
                         {searching ? (
                           <p className="px-3 py-2 text-xs text-slate-400">Searching...</p>
-                        ) : (
+                        ) : accountOptions.length > 0 ? (
                           accountOptions.map((account) => (
                             <button
                               key={account.id}
@@ -177,6 +180,14 @@ export function CreateContactModal() {
                               {account.companyName}
                             </button>
                           ))
+                        ) : (
+                          <p className="px-3 py-2 text-xs text-slate-400">
+                            No matching accounts. Try a different name or{" "}
+                            <a href="/crm/relationships/new" className="text-blue-700 hover:underline">
+                              create one
+                            </a>
+                            .
+                          </p>
                         )}
                       </div>
                     ) : null}

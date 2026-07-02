@@ -8,6 +8,18 @@ import { SearchInput } from "@/components/crm/ui/search-input";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 
+async function getAccountName(accountId: string): Promise<string | null> {
+  try {
+    const account = await db.account.findUnique({
+      where: { id: accountId },
+      select: { companyName: true },
+    });
+    return account?.companyName ?? null;
+  } catch {
+    return null;
+  }
+}
+
 type ContactsPageProps = {
   searchParams?: Promise<{
     search?: string;
@@ -44,6 +56,9 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
     dbWarning = "Database is unreachable. Check DATABASE_URL and run migrations.";
   }
 
+  const filteredAccountName = filters.accountId ? await getAccountName(filters.accountId) : null;
+  const hasActiveFilters = Boolean(filters.search || filters.accountId);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -52,12 +67,29 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
         actions={<CreateContactModal />}
       />
 
+      {filters.accountId ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          <span>
+            Showing contacts for{" "}
+            <Link href={`/crm/accounts/${filters.accountId}`} className="font-medium hover:underline">
+              {filteredAccountName ?? "this account"}
+            </Link>
+          </span>
+          <Link href="/crm/contacts" className="ml-auto text-xs text-blue-700 hover:underline">
+            Clear filter
+          </Link>
+        </div>
+      ) : null}
+
       <FilterBar>
         <SearchInput
           placeholder="Search contact name or email"
           defaultValue={filters.search}
           className="md:col-span-3"
         />
+        {filters.accountId ? (
+          <input type="hidden" name="accountId" value={filters.accountId} />
+        ) : null}
         <button type="submit" className="rounded-md bg-blue-700 px-3 py-2 text-sm font-medium text-white">
           Apply
         </button>
@@ -112,7 +144,14 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
       </DataTable>
 
       {!contacts.length && !dbWarning ? (
-        <EmptyState title="No contacts yet" description="Use Lead Discovery or add contacts from account records." />
+        <EmptyState
+          title={hasActiveFilters ? "No matching contacts" : "No contacts yet"}
+          description={
+            hasActiveFilters
+              ? "Try adjusting your search or clearing filters."
+              : "Use Lead Discovery or add contacts from account records."
+          }
+        />
       ) : null}
       {dbWarning ? (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">

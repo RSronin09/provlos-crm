@@ -94,6 +94,16 @@ export function EditablePersonInfo({
         <button
           type="button"
           onClick={() => {
+            if (editing) {
+              setForm({
+                fullName,
+                title: title ?? "",
+                email: email ?? "",
+                phone: phone ?? "",
+                department: department ?? "",
+                linkedinUrl: linkedinUrl ?? "",
+              });
+            }
             setEditing((prev) => !prev);
             setError(null);
           }}

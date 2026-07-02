@@ -6,7 +6,9 @@ import { PageHeader } from "@/components/crm/ui/page-header";
 import { RightRailCard } from "@/components/crm/ui/right-rail-card";
 import { ActivityFeed } from "@/components/crm/ui/activity-feed";
 import { db } from "@/lib/db";
+import { getActivityTypeLabel, getTaskTypeLabel } from "@/lib/activity-labels";
 import { notFound } from "next/navigation";
+import { Prisma } from "@prisma/client";
 
 type ContactDetailProps = {
   params: Promise<{ id: string }>;
@@ -14,14 +16,35 @@ type ContactDetailProps = {
 
 export default async function ContactDetailPage({ params }: ContactDetailProps) {
   const { id } = await params;
-  const contact = await db.contact.findUnique({
-    where: { id },
-    include: {
-      account: true,
-      activities: { orderBy: { occurredAt: "desc" }, take: 20 },
-      tasks: { orderBy: [{ status: "asc" }, { dueAt: "asc" }], take: 20 },
-    },
-  });
+
+  let contact: Prisma.ContactGetPayload<{
+    include: { account: true; activities: true; tasks: true };
+  }> | null = null;
+  let dbWarning: string | null = null;
+
+  try {
+    contact = await db.contact.findUnique({
+      where: { id },
+      include: {
+        account: true,
+        activities: { orderBy: { occurredAt: "desc" }, take: 20 },
+        tasks: { orderBy: [{ status: "asc" }, { dueAt: "asc" }], take: 20 },
+      },
+    });
+  } catch {
+    dbWarning = "Database is unreachable. Check DATABASE_URL and run migrations.";
+  }
+
+  if (dbWarning) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Contact" />
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {dbWarning}
+        </p>
+      </div>
+    );
+  }
 
   if (!contact) notFound();
 
@@ -59,7 +82,7 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
             <ActivityFeed
               items={contact.activities.map((activity) => ({
                 id: activity.id,
-                title: activity.type,
+                title: getActivityTypeLabel(activity.type),
                 content: activity.content ?? activity.outcome,
                 timestamp: activity.occurredAt.toISOString().slice(0, 16).replace("T", " "),
               }))}
@@ -70,7 +93,7 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
             title="Tasks"
             tasks={contact.tasks.map((task) => ({
               id: task.id,
-              title: task.type,
+              title: getTaskTypeLabel(task.type),
               subtitle: task.notes ?? undefined,
               status: task.status,
             }))}
@@ -85,14 +108,22 @@ export default async function ContactDetailPage({ params }: ContactDetailProps) 
           </RightRailCard>
           <RightRailCard title="Related Tabs">
             <div className="flex flex-col gap-2 text-sm">
-              <Link href="/crm/contacts" className="text-blue-700 hover:underline">
-                All Contacts
-              </Link>
               <Link href={`/crm/accounts/${contact.accountId}`} className="text-blue-700 hover:underline">
                 Account Record
               </Link>
+              <Link href={`/crm/contacts?accountId=${contact.accountId}`} className="text-blue-700 hover:underline">
+                Other Contacts at {contact.account.companyName}
+              </Link>
+              {contact.account.accountType === "CUSTOMER" ? (
+                <Link href="/crm/pipeline" className="text-blue-700 hover:underline">
+                  Pipeline Board
+                </Link>
+              ) : null}
               <Link href="/crm/tasks?view=open" className="text-blue-700 hover:underline">
                 Open Tasks
+              </Link>
+              <Link href="/crm/contacts" className="text-blue-700 hover:underline">
+                All Contacts
               </Link>
             </div>
           </RightRailCard>
