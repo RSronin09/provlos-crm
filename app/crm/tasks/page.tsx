@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { CreateTaskModal } from "@/components/crm/create-task-modal";
 import { TaskStatusToggle } from "@/components/crm/task-status-toggle";
 import { DataTable } from "@/components/crm/ui/data-table";
+import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
@@ -101,7 +102,15 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                 {task.account.companyName}
               </Link>
             </td>
-            <td className="px-4 py-3">{task.contact?.fullName ?? "-"}</td>
+            <td className="px-4 py-3">
+              {task.contact ? (
+                <Link href={`/crm/contacts/${task.contact.id}`} className="text-blue-700 hover:underline">
+                  {task.contact.fullName ?? "Unnamed contact"}
+                </Link>
+              ) : (
+                "-"
+              )}
+            </td>
             <td className="px-4 py-3">{task.dueAt ? task.dueAt.toISOString().slice(0, 10) : "-"}</td>
             <td className="px-4 py-3">
               <TaskTimelineBadge dueAt={task.dueAt} status={task.status} />
@@ -113,6 +122,12 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           </tr>
         )})}
       </DataTable>
+      {tasks.length === 0 && !dbWarning ? (
+        <EmptyState
+          title="No tasks found"
+          description="Try adjusting filters, or create a task from an account or contact record."
+        />
+      ) : null}
       {dbWarning ? (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {dbWarning}

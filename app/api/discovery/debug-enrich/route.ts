@@ -87,7 +87,9 @@ export async function POST(request: NextRequest) {
     const apolloBody: Record<string, unknown> = {
       organization_name: contact.account.companyName,
       reveal_personal_emails: false,
-      reveal_phone_number: true,
+      // Phone reveal requires a public webhook_url — Apollo rejects the
+      // request otherwise, so the diagnostic mirrors production and skips it.
+      reveal_phone_number: false,
     };
     if (contact.linkedinUrl) {
       apolloBody.linkedin_url = contact.linkedinUrl;

@@ -18,11 +18,13 @@ export async function POST(request: NextRequest) {
 
   const { companyName, website, state, region, refresh, persistToCrm } = parsed.data;
 
-  if (!process.env.SERPER_API_KEY && !process.env.HUNTER_API_KEY) {
+  const hasAnyProvider =
+    process.env.APOLLO_API_KEY || process.env.HUNTER_API_KEY || process.env.SERPER_API_KEY;
+  if (!hasAnyProvider) {
     return Response.json(
       {
         error:
-          "No decision-maker providers configured. Set SERPER_API_KEY and/or HUNTER_API_KEY in environment variables.",
+          "No decision-maker providers configured. Set at least one of APOLLO_API_KEY, HUNTER_API_KEY, or SERPER_API_KEY in environment variables.",
       },
       { status: 500 },
     );

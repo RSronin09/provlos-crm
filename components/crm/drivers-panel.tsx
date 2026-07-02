@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { DriverForm } from "./driver-form";
 
 type DriverRow = {
@@ -114,12 +115,20 @@ export function DriversPanel({ drivers }: DriversPanelProps) {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => { setEditDriver(d); setShowAdd(false); }}
-                      className="text-xs text-blue-700 hover:underline"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => { setEditDriver(d); setShowAdd(false); }}
+                        className="text-xs text-blue-700 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <Link
+                        href={`/crm/deliveries/all?driverId=${d.id}`}
+                        className="text-xs text-blue-700 hover:underline"
+                      >
+                        Deliveries
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}

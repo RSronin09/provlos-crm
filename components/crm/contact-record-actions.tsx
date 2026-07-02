@@ -1,6 +1,7 @@
 "use client";
 
 import { ActivityType, TaskType } from "@prisma/client";
+import { ACTIVITY_TYPE_LABELS, TASK_TYPE_LABELS } from "@/lib/activity-labels";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -10,21 +11,13 @@ type ContactRecordActionsProps = {
   compact?: boolean;
 };
 
-const ACTIVITY_TYPE_OPTIONS: { value: ActivityType; label: string }[] = [
-  { value: ActivityType.CALL_ATTEMPT, label: "Call Attempt" },
-  { value: ActivityType.CALL_CONNECTED, label: "Call Connected" },
-  { value: ActivityType.EMAIL_SENT, label: "Email Sent" },
-  { value: ActivityType.EMAIL_REPLY, label: "Email Reply" },
-  { value: ActivityType.MEETING, label: "Meeting" },
-  { value: ActivityType.NOTE, label: "Note" },
-];
+const ACTIVITY_TYPE_OPTIONS: { value: ActivityType; label: string }[] = (
+  Object.keys(ACTIVITY_TYPE_LABELS) as ActivityType[]
+).map((value) => ({ value, label: ACTIVITY_TYPE_LABELS[value] }));
 
-const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = [
-  { value: TaskType.CALL, label: "Call" },
-  { value: TaskType.EMAIL_FOLLOWUP, label: "Email Follow-up" },
-  { value: TaskType.VERIFY_CONTACT, label: "Verify Contact" },
-  { value: TaskType.RESEARCH, label: "Research" },
-];
+const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = (
+  Object.keys(TASK_TYPE_LABELS) as TaskType[]
+).map((value) => ({ value, label: TASK_TYPE_LABELS[value] }));
 
 export function ContactRecordActions({
   accountId,

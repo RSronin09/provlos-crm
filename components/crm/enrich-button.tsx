@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type EnrichResult = {
@@ -10,6 +11,7 @@ type EnrichResult = {
 };
 
 export function EnrichButton({ accountId }: { accountId: string }) {
+  const router = useRouter();
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [result, setResult] = useState<EnrichResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -34,6 +36,9 @@ export function EnrichButton({ accountId }: { accountId: string }) {
       } else {
         setResult(json.data);
         setStatus("done");
+        if (json.data && (json.data.contactsAdded > 0 || json.data.contactsUpdated > 0)) {
+          router.refresh();
+        }
       }
     } catch {
       setErrorMsg("Network error. Please try again.");

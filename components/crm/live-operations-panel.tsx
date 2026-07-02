@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { LiveMap } from "./live-map";
 import type { DriverPin, DeliveryPin } from "./live-map-inner";
+import { AT_RISK_WINDOW_HOURS } from "@/lib/delivery-constants";
+
+const AT_RISK_WINDOW_MS = AT_RISK_WINDOW_HOURS * 60 * 60_000;
 
 export interface LiveDriver {
   id: string;
@@ -122,7 +125,7 @@ export function LiveOperationsPanel({ initialDrivers, initialDeliveries }: Props
             isOverdue: new Date(d.requestedDeliveryDateTime) < now,
             isAtRisk:
               new Date(d.requestedDeliveryDateTime) > now &&
-              new Date(d.requestedDeliveryDateTime).getTime() - now.getTime() < 90 * 60_000,
+              new Date(d.requestedDeliveryDateTime).getTime() - now.getTime() < AT_RISK_WINDOW_MS,
           })),
         );
       }

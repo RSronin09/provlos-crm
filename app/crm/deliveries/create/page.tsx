@@ -14,6 +14,7 @@ export default async function CreateDeliveryPage({ searchParams }: CreateDeliver
 
   const [accounts, drivers, suggestedDriverId] = await Promise.all([
     db.account.findMany({
+      where: { accountType: "CUSTOMER" },
       select: { id: true, companyName: true },
       orderBy: { companyName: "asc" },
       take: 500,

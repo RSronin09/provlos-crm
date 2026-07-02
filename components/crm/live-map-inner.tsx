@@ -72,6 +72,17 @@ function makeDeliveryIcon(type: "pickup" | "dropoff", isOverdue: boolean, isAtRi
 
 function AutoCenter({ drivers, deliveries }: { drivers: DriverPin[]; deliveries: DeliveryPin[] }) {
   const map = useMap();
+  // Re-fit bounds whenever the set of visible pins changes (new driver comes
+  // online, a delivery is added/completed, etc). We key off ids rather than
+  // lat/lng so routine 30s location refreshes don't yank the map out from
+  // under a dispatcher who is actively panning/zooming to inspect a pin.
+  const pinKey = [
+    ...drivers.map((d) => `d:${d.driverId}`),
+    ...deliveries.map((d) => `${d.type}:${d.id}`),
+  ]
+    .sort()
+    .join("|");
+
   useEffect(() => {
     const points: [number, number][] = [
       ...drivers.map((d) => [d.lat, d.lng] as [number, number]),
@@ -81,8 +92,8 @@ function AutoCenter({ drivers, deliveries }: { drivers: DriverPin[]; deliveries:
       const bounds = L.latLngBounds(points);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinKey]);
   return null;
 }
 

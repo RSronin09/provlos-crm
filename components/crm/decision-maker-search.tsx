@@ -188,7 +188,6 @@ export function DecisionMakerSearch() {
               onChange={(event) => handleTokenChange(event.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
               placeholder="Stored in browser after first entry"
-              required
             />
           </label>
           <label className="text-sm">
@@ -258,9 +257,9 @@ export function DecisionMakerSearch() {
           <button
             type="button"
             onClick={addToCrm}
-            disabled={saving || !result || result.source === "existing"}
+            disabled={saving || !result || result.contacts.length === 0}
             className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 hover:bg-blue-600 transition-colors"
-            title={result?.source === "existing" ? "Already in CRM" : "Save account and contacts to CRM"}
+            title={result?.account ? "Save any new contacts to the existing CRM record" : "Save account and contacts to CRM"}
           >
             {saving ? "Saving…" : result?.account ? "Update CRM" : "Add to CRM"}
           </button>

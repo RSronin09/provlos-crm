@@ -3,6 +3,8 @@ import { TERMINAL_STATUSES, isOverdue, isAtRisk } from "@/lib/delivery-queue";
 import { IssueStatus } from "@prisma/client";
 import { LiveOperationsPanel } from "@/components/crm/live-operations-panel";
 import type { LiveDriver, LiveDelivery } from "@/components/crm/live-operations-panel";
+import { PageHeader } from "@/components/crm/ui/page-header";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -105,14 +107,32 @@ export default async function LiveOperationsPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4 sm:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Live Operations</h1>
-          <p className="text-sm text-slate-500">
-            Real-time view of active drivers and open deliveries · Auto-refreshes every 30 s
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Live Operations"
+        subtitle="Real-time view of active drivers and open deliveries · Auto-refreshes every 30 s"
+        actions={
+          <div className="flex gap-2">
+            <Link
+              href="/crm/deliveries"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              ← Dashboard
+            </Link>
+            <Link
+              href="/crm/deliveries/dispatch"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Dispatch Board
+            </Link>
+            <Link
+              href="/crm/deliveries/create"
+              className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white hover:bg-blue-800"
+            >
+              + New Delivery
+            </Link>
+          </div>
+        }
+      />
 
       <div className="flex-1 min-h-0">
         <LiveOperationsPanel initialDrivers={drivers} initialDeliveries={deliveries} />

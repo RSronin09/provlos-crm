@@ -118,6 +118,9 @@ export function DeliveryCreateForm({
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             >
               <option value="">— No account —</option>
+              {customerId && !accounts.some((a) => a.id === customerId) ? (
+                <option value={customerId}>Selected account (not a Customer-type record)</option>
+              ) : null}
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.companyName}
@@ -259,7 +262,7 @@ export function DeliveryCreateForm({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Assign Driver{" "}
-              {suggestedDriverId && !assignedDriverId ? (
+              {suggestedDriverId && assignedDriverId === suggestedDriverId ? (
                 <span className="ml-1 text-xs text-blue-600">(auto-suggested)</span>
               ) : null}
             </label>

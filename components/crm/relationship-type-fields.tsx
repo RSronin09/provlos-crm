@@ -14,6 +14,8 @@ type RelationshipTypeFieldsProps = {
     creditLimit: number | null;
     contractStart: string | null;
     contractEnd: string | null;
+    whatTheyMove: string | null;
+    whyHireCouriers: string | null;
   };
 };
 
@@ -35,6 +37,8 @@ export function RelationshipTypeFields({
     creditLimit: fields.creditLimit?.toString() ?? "",
     contractStart: fields.contractStart?.slice(0, 10) ?? "",
     contractEnd: fields.contractEnd?.slice(0, 10) ?? "",
+    whatTheyMove: fields.whatTheyMove ?? "",
+    whyHireCouriers: fields.whyHireCouriers ?? "",
   });
 
   if (config.detailFields.length === 0) return null;
@@ -54,6 +58,8 @@ export function RelationshipTypeFields({
         creditLimit: form.creditLimit ? Number(form.creditLimit) : null,
         contractStart: form.contractStart || null,
         contractEnd: form.contractEnd || null,
+        whatTheyMove: form.whatTheyMove || null,
+        whyHireCouriers: form.whyHireCouriers || null,
       };
       const res = await fetch(`/api/accounts/${accountId}`, {
         method: "PATCH",

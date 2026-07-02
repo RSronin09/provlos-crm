@@ -39,7 +39,7 @@ export default async function DispatchBoardPage() {
     dispatcherNotes: d.dispatcherNotes,
     priorityScore: computeDeliveryPriorityScore(d),
     isOverdue: isOverdue(d),
-    isAtRisk: isAtRisk(d, 2),
+    isAtRisk: isAtRisk(d),
     hasOpenIssue: d.issues.length > 0,
     stopOrder: d.stopOrder,
     customer: d.customer,

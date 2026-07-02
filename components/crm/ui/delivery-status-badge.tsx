@@ -15,7 +15,7 @@ const colorMap: Record<DeliveryStatus, string> = {
   cancelled: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
-const labelMap: Record<DeliveryStatus, string> = {
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   pending: "Pending",
   assigned: "Assigned",
   en_route_to_pickup: "En Route to Pickup",
@@ -30,7 +30,7 @@ export function DeliveryStatusBadge({ status }: DeliveryStatusBadgeProps) {
   const cls = colorMap[status] ?? "bg-slate-100 text-slate-700 border-slate-200";
   return (
     <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {labelMap[status] ?? status}
+      {DELIVERY_STATUS_LABELS[status] ?? status}
     </span>
   );
 }

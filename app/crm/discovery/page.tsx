@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { DecisionMakerSearch } from "@/components/crm/decision-maker-search";
 import { BulkDiscovery } from "@/components/crm/bulk-discovery";
 import { SpreadsheetImport } from "@/components/crm/spreadsheet-import";
@@ -31,8 +32,14 @@ const TABS: { id: Tab; label: string; description: string }[] = [
   },
 ];
 
+function isTab(value: string | null): value is Tab {
+  return !!value && TABS.some((t) => t.id === value);
+}
+
 export default function DiscoveryPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("search");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<Tab>(isTab(initialTab) ? initialTab : "search");
 
   const active = TABS.find((t) => t.id === activeTab)!;
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { StageBadge } from "@/components/crm/ui/stage-badge";
+import { getStageLabelForType } from "@/lib/account-types";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -34,8 +35,8 @@ type PipelineBoardProps = {
 const STAGES: PipelineStage[] = [
   "TARGET",
   "ENRICHING",
-  "QUALIFIED",
   "CONTACTED",
+  "QUALIFIED",
   "PROPOSAL",
   "WON",
   "LOST",
@@ -121,7 +122,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
             : account,
         ),
       );
-      setStatus(`Moved account to ${pendingMove.toStage}.`);
+      setStatus(`Moved account to ${getStageLabelForType(pendingMove.toStage, "CUSTOMER")}.`);
       setPendingMove(null);
       setMoveNote("");
       setNoteFrom("");
@@ -144,7 +145,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
             className="w-[78vw] flex-shrink-0 snap-start rounded-lg border border-slate-200 bg-white p-3 shadow-sm md:w-auto"
           >
             <div className="mb-3 flex items-center justify-between">
-              <StageBadge stage={stage} />
+              <StageBadge stage={stage} accountType="CUSTOMER" />
               <span className="text-xs text-slate-500">{byStage[stage].length}</span>
             </div>
             <div className="space-y-2">
@@ -188,7 +189,7 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
                     <option value="">Move to stage...</option>
                     {STAGES.filter((s) => s !== renderStage(account.stage)).map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {getStageLabelForType(s, "CUSTOMER")}
                       </option>
                     ))}
                   </select>
@@ -211,7 +212,8 @@ export function PipelineBoard({ accounts: initialAccounts }: PipelineBoardProps)
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
             <h3 className="text-lg font-semibold">Add note for stage move</h3>
             <p className="mt-1 text-sm text-slate-600">
-              A note is required when moving an account to {pendingMove.toStage}.
+              A note is required when moving an account to{" "}
+              {getStageLabelForType(pendingMove.toStage, "CUSTOMER")}.
             </p>
             <input
               value={noteFrom}

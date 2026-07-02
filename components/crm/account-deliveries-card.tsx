@@ -30,7 +30,7 @@ export async function AccountDeliveriesCard({
   ]);
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section id="deliveries" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
           Deliveries
@@ -79,7 +79,7 @@ export async function AccountDeliveriesCard({
         </ul>
       )}
 
-      {deliveries.length >= 5 ? (
+      {deliveries.length > 0 ? (
         <Link
           href={`/crm/deliveries/all?customerId=${accountId}`}
           className="mt-3 block text-xs text-blue-700 hover:underline"

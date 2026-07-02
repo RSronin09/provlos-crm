@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DeliveryStatus, DeliveryPriority } from "@prisma/client";
 
@@ -39,6 +39,19 @@ export function DeliveryDetailActions({
   const [selectedDriverId, setSelectedDriverId] = useState(currentDriverId ?? "");
   const [selectedStatus, setSelectedStatus] = useState<DeliveryStatus>(currentStatus);
   const [selectedPriority, setSelectedPriority] = useState<DeliveryPriority>(currentPriority);
+
+  // Server props change after router.refresh() (e.g. assigning a driver also
+  // flips status to "assigned"). Keep the dropdowns in sync so they never show
+  // a stale value after a successful mutation.
+  useEffect(() => {
+    setSelectedDriverId(currentDriverId ?? "");
+  }, [currentDriverId]);
+  useEffect(() => {
+    setSelectedStatus(currentStatus);
+  }, [currentStatus]);
+  useEffect(() => {
+    setSelectedPriority(currentPriority);
+  }, [currentPriority]);
 
   async function run(action: () => Promise<void>, successMsg: string) {
     try {

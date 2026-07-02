@@ -133,7 +133,7 @@ export function BulkEnrichPanel({
                     ? `${noContacts.length} ${entityLabel} have no contacts yet`
                     : `${accounts.length} ${entityLabel} selected`}
                   {" — "}
-                  looks up contacts via Serper &amp; Hunter.io
+                  looks up contacts via Apollo, Hunter.io &amp; web search
                 </p>
               </div>
               {state !== "running" && (
