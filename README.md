@@ -1,6 +1,6 @@
-# ProvLOS CRM (Next.js + Prisma + Neon)
+# Doctors Transport Operations Platform (Next.js + Prisma + Neon)
 
-Core CRM architecture v1 for account funneling, contact tracking, activities, and tasks.
+CRM + dispatch platform for Doctors Transport: vendor/customer relationship management, contact tracking, activities/tasks, delivery dispatching, and driver monitoring.
 
 ## Local Setup
 

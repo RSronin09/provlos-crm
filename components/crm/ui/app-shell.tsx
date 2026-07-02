@@ -56,10 +56,10 @@ export function AppShell({ navItems, children }: AppShellProps) {
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="text-sm font-semibold tracking-wide text-slate-800">ProvLOS CRM</span>
+            <span className="text-sm font-semibold tracking-wide text-slate-800">Doctors Transport</span>
           </div>
 
-          <div className="ml-auto hidden text-xs text-slate-500 md:block">Prospecting Workspace</div>
+          <div className="ml-auto hidden text-xs text-slate-500 md:block">Operations Workspace</div>
         </div>
       </header>
 
@@ -86,7 +86,7 @@ export function AppShell({ navItems, children }: AppShellProps) {
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
-            <span className="text-sm font-semibold text-slate-800">ProvLOS CRM</span>
+            <span className="text-sm font-semibold text-slate-800">Doctors Transport</span>
           </div>
           <button
             type="button"

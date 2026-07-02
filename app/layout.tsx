@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ProvLOS CRM",
-  description: "ProvLOS CRM architecture v1",
+  title: "Doctors Transport",
+  description: "Doctors Transport operations platform: CRM, dispatch, and driver monitoring",
 };
 
 export const viewport: Viewport = {
