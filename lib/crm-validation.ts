@@ -196,6 +196,67 @@ export const addDiscoveredLeadSchema = z.object({
   ),
 });
 
+export const instantlyLocationSchema = z.union([
+  z.object({ place_id: z.string(), label: z.string().optional() }),
+  z.object({
+    city: z.string().optional(),
+    state: z.string().optional(),
+    country: z.string().optional(),
+  }),
+]);
+
+const employeeCountBracketSchema = z.enum([
+  "0 - 25",
+  "25 - 100",
+  "100 - 250",
+  "250 - 1000",
+  "1K - 10K",
+  "10K - 50K",
+  "50K - 100K",
+  "> 100K",
+]);
+
+const employeeCountRangeSchema = z.object({
+  op: z.enum(["gte", "lte", "between"]),
+  min: z.number().optional(),
+  max: z.number().optional(),
+});
+
+export const instantlySearchFiltersSchema = z.object({
+  locations: z.array(instantlyLocationSchema).optional(),
+  location_mode: z.enum(["contact", "company"]).optional(),
+  industry: z.object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() }).optional(),
+  subIndustry: z.object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() }).optional(),
+  title: z.object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() }).optional(),
+  department: z.array(z.string()).optional(),
+  level: z.array(z.string()).optional(),
+  employeeCount: z.array(z.union([employeeCountBracketSchema, employeeCountRangeSchema])).optional(),
+  company_name: z.object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() }).optional(),
+  keyword_filter: z.object({ include: z.string().optional(), exclude: z.string().optional() }).optional(),
+  look_alike: z.string().optional(),
+  skip_owned_leads: z.boolean().optional(),
+  show_one_lead_per_company: z.boolean().optional(),
+});
+
+export const instantlyCountSchema = z.object({
+  counties: z.array(z.string()).optional(),
+  keywords: z.array(z.string()).optional(),
+  titles: z.array(z.string()).optional(),
+  employeeCount: z.array(z.string()).optional(),
+  filters: instantlySearchFiltersSchema.optional(),
+});
+
+export const instantlySearchSchema = instantlyCountSchema.extend({
+  limit: z.number().int().positive().max(1000).default(50),
+  listName: z.string().optional(),
+  resourceId: z.string().uuid().optional(),
+});
+
+export const instantlyImportSchema = z.object({
+  listId: z.string().min(1),
+  limit: z.number().int().positive().max(500).optional(),
+});
+
 const spreadsheetRowSchema = z.object({
   companyName: z.string().min(1),
   website: z.string().optional().nullable(),

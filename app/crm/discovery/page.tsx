@@ -4,8 +4,9 @@ import { useState } from "react";
 import { DecisionMakerSearch } from "@/components/crm/decision-maker-search";
 import { BulkDiscovery } from "@/components/crm/bulk-discovery";
 import { SpreadsheetImport } from "@/components/crm/spreadsheet-import";
+import { InstantlySearchPanel } from "@/components/crm/instantly-search-panel";
 
-type Tab = "search" | "bulk" | "spreadsheet";
+type Tab = "search" | "bulk" | "spreadsheet" | "instantly";
 
 const TABS: { id: Tab; label: string; description: string }[] = [
   {
@@ -22,6 +23,11 @@ const TABS: { id: Tab; label: string; description: string }[] = [
     id: "spreadsheet",
     label: "Spreadsheet Import",
     description: "Upload an Excel or CSV file to bulk-import and enrich leads.",
+  },
+  {
+    id: "instantly",
+    label: "Instantly Lead Finder",
+    description: "Search Instantly's verified B2B database by industry, title, and location, then import to the CRM.",
   },
 ];
 
@@ -63,6 +69,7 @@ export default function DiscoveryPage() {
       {activeTab === "search" && <DecisionMakerSearch />}
       {activeTab === "bulk" && <BulkDiscovery />}
       {activeTab === "spreadsheet" && <SpreadsheetImport />}
+      {activeTab === "instantly" && <InstantlySearchPanel />}
     </div>
   );
 }
