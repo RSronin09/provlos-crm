@@ -7,9 +7,7 @@ function KeyStatus({ name, value }: { name: string; value: string | undefined })
     <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
       <div>
         <p className="text-sm font-medium text-slate-800 font-mono">{name}</p>
-        <p className="text-xs text-slate-500 mt-0.5">
-          {isSet ? `Configured (${value!.slice(0, 4)}${"•".repeat(8)})` : "Not set"}
-        </p>
+        <p className="text-xs text-slate-500 mt-0.5">{isSet ? "Configured" : "Not set"}</p>
       </div>
       <span
         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -142,13 +140,14 @@ export default function SettingsPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-semibold text-slate-800">Authentication</h2>
         <p className="text-sm text-slate-600">
-          Write operations (import, enrich, create) check for an{" "}
-          <code className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">ADMIN_TOKEN</code>{" "}
-          environment variable. When not set, all writes are open (suitable for private/internal use).
+          Admin token checks are currently disabled for this build — all write operations (import,
+          enrich, create, dispatch actions) are open to anyone with access to the app. The Admin Token
+          fields on the discovery and import pages are inert and can be left blank.
         </p>
         <p className="text-xs text-slate-500">
-          To restrict access: set <code className="font-mono text-xs">ADMIN_TOKEN=your-secret</code> in
-          Vercel and enter the same value in the Admin Token field on the discovery and import pages.
+          This is suitable for a private/internal deployment. To require a token for writes, re-enable
+          the check in <code className="font-mono text-xs">lib/admin.ts</code> and set{" "}
+          <code className="font-mono text-xs">ADMIN_TOKEN</code> in your environment.
         </p>
       </div>
 
@@ -158,7 +157,7 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
             { href: "/crm/discovery", label: "Lead Discovery", desc: "Search & enrich decision makers" },
-            { href: "/crm/import", label: "Spreadsheet Import", desc: "Bulk import from Excel / CSV" },
+            { href: "/crm/discovery?tab=spreadsheet", label: "Spreadsheet Import", desc: "Bulk import from Excel / CSV" },
             { href: "/crm/relationships/customers", label: "Customers", desc: "View & enrich customer accounts" },
             { href: "/crm/pipeline", label: "Pipeline", desc: "Customer deal pipeline board" },
             { href: "/crm/dashboard", label: "Dashboard", desc: "CRM & delivery KPIs" },
