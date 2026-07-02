@@ -44,7 +44,7 @@ export default async function DeliveryDashboardPage() {
     db.delivery.count({
       where: { status: "delivered", deliveredAt: { gte: today, lt: tomorrow } },
     }),
-    db.delivery.count({ where: { status: "issue_reported" } }),
+    db.delivery.count({ where: { issues: { some: { status: IssueStatus.open } } } }),
     getOverdueCount(),
     getUnassignedCount(),
     db.delivery.findMany({
@@ -108,7 +108,7 @@ export default async function DeliveryDashboardPage() {
         <MetricCard label="In Progress" value={inProgressCount} hint="En route / picked up"
           footer={<Link href="/crm/deliveries/all?inProgressOnly=true" className="text-xs text-blue-700 hover:underline">View</Link>} />
         <MetricCard label="Delivered Today" value={deliveredTodayCount}
-          footer={<Link href="/crm/deliveries/all?status=delivered" className="text-xs text-blue-700 hover:underline">View</Link>} />
+          footer={<Link href="/crm/deliveries/all?deliveredToday=true" className="text-xs text-blue-700 hover:underline">View</Link>} />
         <MetricCard label="Issues" value={issueCount}
           footer={<Link href="/crm/deliveries/all?hasIssue=true" className="text-xs text-blue-700 hover:underline">View</Link>} />
         <MetricCard label="Overdue" value={overdueCount} hint="Past deadline"
@@ -132,7 +132,7 @@ export default async function DeliveryDashboardPage() {
             <DataTable headers={["#", "Customer", "Delivery To", "Due", "Driver", "Pri", "Status", ""]}>
               {sortedQueue.map((d, idx) => {
                 const overdue = isOverdue(d);
-                const atRisk = isAtRisk(d, 2);
+                const atRisk = isAtRisk(d);
                 const score = computeDeliveryPriorityScore(d);
                 const hasOpenIssue = d.issues.length > 0;
 
@@ -200,7 +200,12 @@ export default async function DeliveryDashboardPage() {
               {driverWorkload.map((driver) => (
                 <div key={driver.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800">{driver.name}</p>
+                    <Link
+                      href={`/crm/deliveries/all?driverId=${driver.id}`}
+                      className="text-sm font-medium text-slate-800 hover:text-blue-700 hover:underline"
+                    >
+                      {driver.name}
+                    </Link>
                     {driver.nextDeliveryAt ? (
                       <p className="text-xs text-slate-400">
                         Next: {new Date(driver.nextDeliveryAt).toISOString().slice(0, 10)}

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { DeliveryPriority, DeliveryStatus } from "@prisma/client";
+import { AT_RISK_WINDOW_HOURS } from "@/lib/delivery-constants";
 
 /** Statuses that count as "open/active" for driver workload */
 export const OPEN_STATUSES: DeliveryStatus[] = [
@@ -7,6 +8,7 @@ export const OPEN_STATUSES: DeliveryStatus[] = [
   DeliveryStatus.en_route_to_pickup,
   DeliveryStatus.picked_up,
   DeliveryStatus.en_route_to_delivery,
+  DeliveryStatus.issue_reported,
 ];
 
 /** Statuses considered "in-flight" (moving) */
@@ -110,7 +112,7 @@ export function isOverdue(delivery: {
 /** Returns true if delivery deadline is within the next N hours */
 export function isAtRisk(
   delivery: { status: DeliveryStatus; requestedDeliveryDateTime: Date },
-  withinHours = 2
+  withinHours = AT_RISK_WINDOW_HOURS
 ): boolean {
   if (TERMINAL_STATUSES.includes(delivery.status)) return false;
   const now = new Date();
@@ -191,7 +193,7 @@ export async function getOverdueCount(): Promise<number> {
 export async function getUnassignedCount(): Promise<number> {
   return db.delivery.count({
     where: {
-      status: { notIn: [...TERMINAL_STATUSES, DeliveryStatus.cancelled] },
+      status: { notIn: TERMINAL_STATUSES },
       assignedDriverId: null,
     },
   });

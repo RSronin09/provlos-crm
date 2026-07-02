@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
-import { DeliveryStatusBadge } from "@/components/crm/ui/delivery-status-badge";
+import { DeliveryStatusBadge, DELIVERY_STATUS_LABELS } from "@/components/crm/ui/delivery-status-badge";
 import { PriorityBadge } from "@/components/crm/ui/priority-badge";
 import { isOverdue, isAtRisk, TERMINAL_STATUSES, IN_PROGRESS_STATUSES } from "@/lib/delivery-queue";
 
@@ -21,6 +21,7 @@ type AllDeliveriesPageProps = {
     hasIssue?: string;
     openOnly?: string;
     inProgressOnly?: string;
+    deliveredToday?: string;
     dateFrom?: string;
     dateTo?: string;
     customerId?: string;
@@ -30,6 +31,9 @@ type AllDeliveriesPageProps = {
 export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesPageProps) {
   const filters = (await searchParams) ?? {};
   const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
 
   const status = Object.values(DeliveryStatus).includes(filters.status as DeliveryStatus)
     ? (filters.status as DeliveryStatus)
@@ -43,6 +47,7 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
   const hasIssue = filters.hasIssue === "true";
   const openOnly = filters.openOnly === "true";
   const inProgressOnly = filters.inProgressOnly === "true";
+  const deliveredToday = filters.deliveredToday === "true";
 
   let dbWarning: string | null = null;
   type DeliveryRow = Prisma.DeliveryGetPayload<{
@@ -78,6 +83,9 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
               }
             : {}),
           ...(hasIssue ? { issues: { some: { status: IssueStatus.open } } } : {}),
+          ...(deliveredToday
+            ? { status: "delivered", deliveredAt: { gte: startOfToday, lt: startOfTomorrow } }
+            : {}),
           ...(filters.dateFrom || filters.dateTo
             ? {
                 requestedDeliveryDateTime: {
@@ -105,14 +113,19 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
         take: 200,
       }),
       db.driver.findMany({ orderBy: { name: "asc" } }),
-      db.account.findMany({ select: { id: true, companyName: true }, orderBy: { companyName: "asc" }, take: 200 }),
+      db.account.findMany({
+        where: { accountType: "CUSTOMER" },
+        select: { id: true, companyName: true },
+        orderBy: { companyName: "asc" },
+        take: 500,
+      }),
     ]);
   } catch {
     dbWarning = "Database is unreachable. Check DATABASE_URL and run migrations.";
   }
 
   const activeFiltersCount = [
-    status, priority, filters.driverId, overdueOnly, unassignedOnly, hasIssue, openOnly, inProgressOnly, filters.dateFrom, filters.dateTo, filters.customerId, filters.search,
+    status, priority, filters.driverId, overdueOnly, unassignedOnly, hasIssue, openOnly, inProgressOnly, deliveredToday, filters.dateFrom, filters.dateTo, filters.customerId, filters.search,
   ].filter(Boolean).length;
 
   return (
@@ -144,7 +157,7 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
         >
           <option value="">All statuses</option>
           {Object.values(DeliveryStatus).map((s) => (
-            <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+            <option key={s} value={s}>{DELIVERY_STATUS_LABELS[s]}</option>
           ))}
         </select>
         <select
@@ -215,6 +228,11 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
               className="rounded border-slate-300" />
             Open only
           </label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer">
+            <input type="checkbox" name="inProgressOnly" value="true" defaultChecked={inProgressOnly}
+              className="rounded border-slate-300" />
+            In progress only
+          </label>
         </div>
         <div className="flex gap-2">
           <button type="submit"
@@ -233,7 +251,7 @@ export default async function AllDeliveriesPage({ searchParams }: AllDeliveriesP
       >
         {deliveries.map((d) => {
           const overdue = isOverdue(d);
-          const atRisk = isAtRisk(d, 2);
+          const atRisk = isAtRisk(d);
           const hasOpenIssue = d.issues.length > 0;
 
           return (
