@@ -36,7 +36,7 @@ export default async function DeliveryDetailPage({ params }: DeliveryDetailPageP
 
   const shortId = delivery.id.slice(0, 8).toUpperCase();
   const overdue = isOverdue(delivery);
-  const atRisk = isAtRisk(delivery, 2);
+  const atRisk = isAtRisk(delivery);
   const openIssueCount = delivery.issues.filter((i) => i.status === IssueStatus.open).length;
 
   function fmt(dt: Date | null): string {
@@ -271,6 +271,12 @@ export default async function DeliveryDetailPage({ params }: DeliveryDetailPageP
                 {delivery.assignedDriver.email ? (
                   <p className="text-slate-500">{delivery.assignedDriver.email}</p>
                 ) : null}
+                <Link
+                  href={`/crm/deliveries/all?driverId=${delivery.assignedDriver.id}`}
+                  className="mt-1 inline-block text-xs text-blue-700 hover:underline"
+                >
+                  View all deliveries for this driver →
+                </Link>
               </div>
             </RightRailCard>
           ) : null}

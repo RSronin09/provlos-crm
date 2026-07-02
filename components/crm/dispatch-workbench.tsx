@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DeliveryStatus, DeliveryPriority } from "@prisma/client";
 import { DeliveryStatusBadge } from "@/components/crm/ui/delivery-status-badge";
@@ -97,6 +97,14 @@ export function DispatchWorkbench({ queue, drivers }: DispatchWorkbenchProps) {
   const [resequencingDriver, setResequencingDriver] = useState<string | null>(null);
 
   const selected = queue.find((d) => d.id === selectedId) ?? null;
+
+  // Keep the notes textarea in sync with the selected delivery — covers the
+  // initial auto-selected delivery (queue[0]) as well as refreshes after a
+  // note was saved elsewhere, so "Save" never silently overwrites existing
+  // dispatcher notes with an empty string.
+  useEffect(() => {
+    setNoteText(selected?.dispatcherNotes ?? "");
+  }, [selected?.id, selected?.dispatcherNotes]);
 
   async function run(action: () => Promise<void>, msg: string) {
     setBusy(true);

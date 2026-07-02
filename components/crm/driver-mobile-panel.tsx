@@ -104,7 +104,7 @@ function DriverLocationSender({ driverId }: { driverId: string }) {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          await fetch(`/api/drivers/${driverId}/location`, {
+          const res = await fetch(`/api/drivers/${driverId}/location`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -113,6 +113,7 @@ function DriverLocationSender({ driverId }: { driverId: string }) {
               accuracy: pos.coords.accuracy,
             }),
           });
+          if (!res.ok) throw new Error("Server rejected location update.");
           setStatus("ok");
         } catch {
           setStatus("error");
@@ -151,7 +152,18 @@ function DriverLocationSender({ driverId }: { driverId: string }) {
       </div>
     );
 
-  return null;
+  if (status === "error")
+    return (
+      <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">
+        ⚠ Couldn&apos;t share location. Dispatch won&apos;t see your position on the live map.
+      </div>
+    );
+
+  return (
+    <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-500">
+      Requesting location access…
+    </div>
+  );
 }
 
 /** Navigation launch buttons for a given address */
