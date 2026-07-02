@@ -28,10 +28,6 @@ type SerperResult = {
   snippet?: string;
 };
 
-function slugify(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
 function parseDomain(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
@@ -128,22 +124,28 @@ async function serperSearch(query: string) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return [];
 
-  const response = await fetch("https://google.serper.dev/search", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-    },
-    body: JSON.stringify({ q: query, num: 10 }),
-    signal: AbortSignal.timeout(8_000),
-  });
+  try {
+    const response = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({ q: query, num: 10 }),
+      signal: AbortSignal.timeout(8_000),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as { organic?: SerperResult[] };
+    return payload.organic ?? [];
+  } catch {
+    // Network failure or timeout — degrade gracefully so one provider
+    // outage never fails the whole lookup.
     return [];
   }
-
-  const payload = (await response.json()) as { organic?: SerperResult[] };
-  return payload.organic ?? [];
 }
 
 async function resolveWebsite(companyName: string, providedWebsite?: string | null) {
@@ -311,7 +313,9 @@ async function searchPeopleFromApollo(
       per_page: 10,
       page: 1,
     };
-    if (domain) body.q_organization_domains = [domain];
+    // Current param name per Apollo docs; the legacy `q_organization_domains`
+    // is silently ignored by the api_search endpoint.
+    if (domain) body.q_organization_domains_list = [domain];
 
     const response = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
       method: "POST",
@@ -333,6 +337,31 @@ async function searchPeopleFromApollo(
   }
 }
 
+/**
+ * Public base URL for Apollo's async phone-number webhook.
+ *
+ * Apollo's people/match endpoint REJECTS requests that set
+ * `reveal_phone_number: true` without a valid public `webhook_url` — phone
+ * numbers are only ever delivered asynchronously to a webhook, never inline.
+ * When no public URL is configured we skip phone reveal entirely so the
+ * synchronous email enrichment keeps working.
+ */
+function getPhoneWebhookBase(): string | null {
+  const explicit = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (explicit) return explicit.replace(/\/+$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return null;
+}
+
+function buildPhoneRevealParams(contactId: string | null | undefined): Record<string, unknown> {
+  const base = contactId ? getPhoneWebhookBase() : null;
+  if (!base) return { reveal_phone_number: false };
+  return {
+    reveal_phone_number: true,
+    webhook_url: `${base}/api/discovery/apollo-phone-webhook?contactId=${contactId}`,
+  };
+}
+
 async function enrichPersonFromApollo(apolloId: string): Promise<ApolloEnrichedPerson | null> {
   const apiKey = process.env.APOLLO_API_KEY;
   if (!apiKey) return null;
@@ -348,7 +377,10 @@ async function enrichPersonFromApollo(apolloId: string): Promise<ApolloEnrichedP
       body: JSON.stringify({
         id: apolloId,
         reveal_personal_emails: false,
-        reveal_phone_number: true,
+        // Phone reveal requires an async webhook and a contact record to
+        // attach the result to — during company-level discovery the contacts
+        // don't exist yet, so we only request the synchronous email data.
+        reveal_phone_number: false,
       }),
       signal: AbortSignal.timeout(10_000),
     });
@@ -432,8 +464,29 @@ type HunterEmail = {
   first_name: string | null;
   last_name: string | null;
   position: string | null;
+  seniority: string | null;
+  department: string | null;
+  confidence: number | null;
   phone_number: string | null;
   linkedin: string | null;
+};
+
+/** Hunter department slugs mapped to display labels used in the CRM. */
+const HUNTER_DEPARTMENT_LABELS: Record<string, string> = {
+  executive: "Executive",
+  management: "Management",
+  operations: "Operations",
+  health: "Health",
+  support: "Support",
+  finance: "Finance",
+  hr: "HR",
+  it: "IT",
+  sales: "Sales",
+  marketing: "Marketing",
+  communication: "Communication",
+  legal: "Legal",
+  education: "Education",
+  design: "Design",
 };
 
 async function searchContactsFromHunter(domain: string | null) {
@@ -443,29 +496,41 @@ async function searchContactsFromHunter(domain: string | null) {
   const url = new URL("https://api.hunter.io/v2/domain-search");
   url.searchParams.set("domain", domain);
   url.searchParams.set("limit", "10");
+  // Only named people (skip generic info@/office@ role addresses and rows
+  // Hunter couldn't attach a person to) — this is a decision-maker lookup.
+  url.searchParams.set("type", "personal");
+  url.searchParams.set("required_field", "full_name");
   url.searchParams.set("api_key", apiKey);
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-  if (!response.ok) return [];
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    if (!response.ok) return [];
 
-  const payload = (await response.json()) as { data?: { emails?: HunterEmail[] } };
-  const emails = payload.data?.emails ?? [];
+    const payload = (await response.json()) as { data?: { emails?: HunterEmail[] } };
+    const emails = payload.data?.emails ?? [];
 
-  return emails.map((entry) => {
-    const fullName = [entry.first_name, entry.last_name].filter(Boolean).join(" ").trim();
-    return {
-      firstName: entry.first_name,
-      lastName: entry.last_name,
-      fullName: fullName || entry.value.split("@")[0],
-      title: entry.position,
-      department: titleToDepartment(entry.position),
-      email: entry.value,
-      phone: entry.phone_number,
-      linkedinUrl: entry.linkedin ?? null,
-      confidenceScore: 0.84,
-      source: "hunter_domain_search",
-    } satisfies DecisionMakerContact;
-  });
+    return emails.map((entry) => {
+      const fullName = [entry.first_name, entry.last_name].filter(Boolean).join(" ").trim();
+      const department =
+        (entry.department ? HUNTER_DEPARTMENT_LABELS[entry.department] : null) ??
+        titleToDepartment(entry.position);
+      return {
+        firstName: entry.first_name,
+        lastName: entry.last_name,
+        fullName: fullName || entry.value.split("@")[0],
+        title: entry.position,
+        department,
+        email: entry.value,
+        phone: entry.phone_number,
+        linkedinUrl: entry.linkedin ?? null,
+        // Use Hunter's own per-email confidence (0–100) instead of a flat guess
+        confidenceScore: typeof entry.confidence === "number" ? entry.confidence / 100 : 0.75,
+        source: "hunter_domain_search",
+      } satisfies DecisionMakerContact;
+    });
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -538,6 +603,10 @@ export async function enrichContactByName(input: {
   organizationName: string;
   domain?: string | null;
   linkedinUrl?: string | null;
+  /** When provided (and a public APP_URL is configured), Apollo's async
+   *  phone-number reveal is requested and delivered to our webhook, which
+   *  attaches the number to this contact. */
+  contactId?: string | null;
 }): Promise<ApolloContactMatch | null> {
   // Clean the name before sending to any API — strips credentials,
   // company name artifacts, and non-person strings
@@ -556,7 +625,7 @@ export async function enrichContactByName(input: {
     const body: Record<string, unknown> = {
       organization_name: input.organizationName,
       reveal_personal_emails: false,
-      reveal_phone_number: true,
+      ...buildPhoneRevealParams(input.contactId),
     };
 
     if (input.linkedinUrl) {
@@ -704,7 +773,11 @@ async function enrichContactFromPDL(input: {
 export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOutput> {
   const providersUsed: string[] = [];
   const resolvedWebsite = await resolveWebsite(input.companyName, input.website);
-  const domain = parseDomain(resolvedWebsite) || `${slugify(input.companyName)}.com`;
+  // Only use a domain we actually resolved. Guessing "<company-slug>.com"
+  // sends Hunter/Apollo a domain that may belong to a completely unrelated
+  // business, returning wrong people and wasting paid requests. With no
+  // domain, Apollo still matches by organization name and Hunter is skipped.
+  const domain = parseDomain(resolvedWebsite);
 
   // Run all three providers in parallel. Apollo is the primary source for
   // email + phone; Hunter fills domain-level emails; Serper adds LinkedIn names.
@@ -765,7 +838,7 @@ export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOu
   const merged = toUniqueContacts([...apolloOnly, ...enrichedHunter, ...serperOnly]).slice(0, 10);
 
   return {
-    resolvedWebsite: resolvedWebsite ?? `https://${domain}`,
+    resolvedWebsite: resolvedWebsite ?? (domain ? `https://${domain}` : null),
     contacts: merged,
     providersUsed,
   };

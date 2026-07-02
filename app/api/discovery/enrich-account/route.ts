@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
       organizationName: account.companyName,
       domain,
       linkedinUrl: contact.linkedinUrl,
+      contactId: contact.id,
     });
 
     if (!match) continue;
