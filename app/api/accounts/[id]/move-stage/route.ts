@@ -1,4 +1,5 @@
-import { uuidSchema, zodErrorResponse } from "@/lib/api";
+import { unauthorizedResponse, uuidSchema, zodErrorResponse } from "@/lib/api";
+import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { AccountStage, ActivityType } from "@prisma/client";
 import { NextRequest } from "next/server";
@@ -13,6 +14,8 @@ const moveStageSchema = z.object({
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
+  if (!isAdminRequest(request)) return unauthorizedResponse();
+
   const { id } = await params;
   if (!uuidSchema.safeParse(id).success) {
     return Response.json({ error: "Invalid account id" }, { status: 400 });
@@ -27,6 +30,12 @@ export async function POST(request: NextRequest, { params }: Params) {
   const account = await db.account.findUnique({ where: { id } });
   if (!account) {
     return Response.json({ error: "Account not found" }, { status: 404 });
+  }
+  if (account.accountType !== "CUSTOMER") {
+    return Response.json(
+      { error: "Pipeline stage moves are only supported for customer accounts" },
+      { status: 400 },
+    );
   }
 
   const { toStage, note, noteFrom } = parsed.data;
