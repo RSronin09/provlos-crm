@@ -10,12 +10,16 @@ import { PageHeader } from "@/components/crm/ui/page-header";
 import { SearchInput } from "@/components/crm/ui/search-input";
 import { StageBadge } from "@/components/crm/ui/stage-badge";
 import { AccountTypeBadge } from "@/components/crm/ui/account-type-badge";
+import { withHttpProtocol } from "@/lib/format";
 import {
   ACCOUNT_TYPE_CONFIG,
   ACCOUNT_TYPE_VALUES,
   AccountType as LocalAccountType,
+  getStageLabelForType,
   getTypeConfig,
 } from "@/lib/account-types";
+
+const SORTABLE_FIELDS = new Set(["updatedAt", "companyName", "industry", "stage", "priorityScore"]);
 
 const TYPE_SLUG: Record<LocalAccountType, string> = {
   CUSTOMER: "customers",
@@ -45,7 +49,7 @@ export async function RelationshipListPage({
   fixedType,
 }: RelationshipListPageProps) {
   const filters = searchParams ?? {};
-  const sort = filters.sort ?? "updatedAt";
+  const sort = filters.sort && SORTABLE_FIELDS.has(filters.sort) ? filters.sort : "updatedAt";
   const direction = filters.direction === "asc" ? "asc" : "desc";
   const typeConfig = fixedType ? getTypeConfig(fixedType) : null;
 
@@ -68,7 +72,7 @@ export async function RelationshipListPage({
             }
           : {}),
         ...(filters.industry
-          ? { industry: { equals: filters.industry, mode: "insensitive" } }
+          ? { industry: { contains: filters.industry, mode: "insensitive" } }
           : {}),
         ...(filters.stage ? { stage: filters.stage } : {}),
         ...(filters.state ? { state: { equals: filters.state, mode: "insensitive" } } : {}),
@@ -164,9 +168,7 @@ export async function RelationshipListPage({
         >
           <option value="">All stages</option>
           {Object.values(AccountStage).map((stage) => {
-            const label = fixedType
-              ? (getTypeConfig(fixedType).stageLabels[stage as keyof typeof ACCOUNT_TYPE_CONFIG.CUSTOMER.stageLabels] ?? stage)
-              : stage;
+            const label = getStageLabelForType(stage, fixedType ?? "CUSTOMER");
             return (
               <option key={stage} value={stage}>
                 {label}
@@ -254,7 +256,7 @@ export async function RelationshipListPage({
             {fixedType ? (
               <td className="px-4 py-3">
                 {account.website ? (
-                  <a href={account.website} className="text-blue-700 hover:underline" target="_blank" rel="noreferrer">
+                  <a href={withHttpProtocol(account.website)} className="text-blue-700 hover:underline" target="_blank" rel="noreferrer">
                     Website
                   </a>
                 ) : "—"}

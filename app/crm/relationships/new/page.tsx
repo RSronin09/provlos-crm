@@ -7,7 +7,7 @@ export default function NewRelationshipPage() {
     <div className="space-y-6">
       <PageHeader
         title="Add Relationship"
-        subtitle="Create a new customer, vendor, bank, supplier, or partner record."
+        subtitle="Create a new customer, vendor, bank, supplier, partner, or other relationship record."
         actions={
           <Link href="/crm/relationships" className="rounded-md border border-slate-300 px-3 py-2 text-sm">
             Back
