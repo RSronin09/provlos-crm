@@ -1,4 +1,5 @@
 import { DashboardCards } from "@/components/crm/dashboard-cards";
+import { AutoRefresh } from "@/components/crm/auto-refresh";
 import { ActivityFeed } from "@/components/crm/ui/activity-feed";
 import { MetricCard } from "@/components/crm/ui/metric-card";
 import { PageHeader } from "@/components/crm/ui/page-header";
@@ -145,6 +146,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <PageHeader
         title="Dashboard"
         subtitle="Operational snapshot across relationships, discovery, and deliveries."

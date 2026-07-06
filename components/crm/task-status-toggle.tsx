@@ -1,13 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function TaskStatusToggle({ taskId, status }: { taskId: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync local state when the server re-renders with fresh data (e.g. from
+  // another device toggling the task or from the auto-refresh polling).
+  useEffect(() => {
+    setCurrentStatus(status);
+  }, [status]);
 
   async function toggle() {
     const nextStatus = currentStatus === "DONE" ? "OPEN" : "DONE";
