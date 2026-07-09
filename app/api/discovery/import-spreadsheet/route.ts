@@ -3,80 +3,26 @@ import { isAdminRequest } from "@/lib/admin";
 import { spreadsheetImportSchema } from "@/lib/crm-validation";
 import { db } from "@/lib/db";
 import { lookupDecisionMakers } from "@/lib/decision-makers";
+import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 // Cap live enrichment to avoid Vercel function timeouts (each lookup ~5-10 s)
 const MAX_ENRICH = 20;
 
-async function saveEnrichedContacts(accountId: string, companyName: string, website: string | null) {
+async function saveEnrichedContacts(
+  accountId: string,
+  companyName: string,
+  website: string | null,
+): Promise<{ added: number; error: string | null }> {
   try {
     const { contacts } = await lookupDecisionMakers({ companyName, website });
-    let added = 0;
-
-    for (const contact of contacts) {
-      const fullName = contact.fullName || [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-      if (!fullName) continue;
-
-      const existingByEmail = contact.email
-        ? await db.contact.findFirst({
-            where: { accountId, email: { equals: contact.email, mode: "insensitive" } },
-          })
-        : null;
-
-      const existingByName = await db.contact.findFirst({
-        where: { accountId, fullName: { equals: fullName, mode: "insensitive" } },
-      });
-
-      const existing = existingByEmail ?? existingByName;
-
-      if (existing) {
-        // Update if Apollo found email/phone that wasn't there before
-        const needsUpdate =
-          (!existing.email && contact.email) ||
-          (!existing.phone && contact.phone) ||
-          (!existing.linkedinUrl && contact.linkedinUrl);
-
-        if (needsUpdate) {
-          await db.contact.update({
-            where: { id: existing.id },
-            data: {
-              email: existing.email ?? contact.email ?? undefined,
-              phone: existing.phone ?? contact.phone ?? undefined,
-              linkedinUrl: existing.linkedinUrl ?? contact.linkedinUrl ?? undefined,
-              title: existing.title ?? contact.title ?? undefined,
-              confidenceScore: Math.max(existing.confidenceScore ?? 0, contact.confidenceScore ?? 0),
-              source: contact.source ?? existing.source ?? undefined,
-              lastVerifiedAt: new Date(),
-            },
-          });
-          added++;
-        }
-        continue;
-      }
-
-      await db.contact.create({
-        data: {
-          accountId,
-          fullName,
-          firstName: contact.firstName ?? undefined,
-          lastName: contact.lastName ?? undefined,
-          title: contact.title ?? undefined,
-          department: contact.department ?? undefined,
-          email: contact.email ?? undefined,
-          phone: contact.phone ?? undefined,
-          linkedinUrl: contact.linkedinUrl ?? undefined,
-          confidenceScore: contact.confidenceScore ?? undefined,
-          source: contact.source ?? "enrichment",
-          lastVerifiedAt: new Date(),
-        },
-      });
-      added++;
-    }
-
-    return added;
-  } catch {
-    return 0;
+    const result = await saveDiscoveredContacts(accountId, contacts, { updateExisting: true });
+    return { added: result.created + result.updated, error: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown enrichment error";
+    console.error(`Enrichment failed for ${companyName}:`, message);
+    return { added: 0, error: message };
   }
 }
 
@@ -85,7 +31,7 @@ export async function POST(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
   const parsed = spreadsheetImportSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -100,31 +46,47 @@ export async function POST(request: NextRequest) {
   let enrichedAccounts = 0;
   let enrichedContacts = 0;
   const errors: { row: number; error: string }[] = [];
+  const enrichmentErrors: { companyName: string; error: string }[] = [];
 
   type ImportedAccount = { id: string; companyName: string; website: string | null };
   const newAccounts: ImportedAccount[] = [];
+
+  // Prefetch all potentially matching accounts in one query instead of a
+  // findFirst per row (rows can number in the hundreds).
+  const websites = [...new Set(rows.map((r) => r.website?.trim()).filter((w): w is string => !!w))];
+  const companyNames = [...new Set(rows.map((r) => r.companyName.trim()))];
+  const existingAccounts = await db.account.findMany({
+    where: {
+      OR: [
+        ...(websites.length ? [{ website: { in: websites } }] : []),
+        { companyName: { in: companyNames, mode: "insensitive" as const } },
+      ],
+    },
+    select: { id: true, companyName: true, website: true },
+  });
+
+  const accountByWebsite = new Map(
+    existingAccounts.filter((a) => a.website).map((a) => [a.website as string, a]),
+  );
+  const accountByName = new Map(existingAccounts.map((a) => [a.companyName.toLowerCase(), a]));
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
 
     try {
       const website = row.website?.trim() || null;
+      const companyName = row.companyName.trim();
 
-      const existing = await db.account.findFirst({
-        where: {
-          OR: [
-            ...(website ? [{ website }] : []),
-            { companyName: { equals: row.companyName.trim(), mode: "insensitive" as const } },
-          ],
-        },
-      });
+      const existing =
+        (website ? accountByWebsite.get(website) : undefined) ??
+        accountByName.get(companyName.toLowerCase());
 
-      let account = existing;
+      let account = existing ?? null;
 
       if (!existing) {
         account = await db.account.create({
           data: {
-            companyName: row.companyName.trim(),
+            companyName,
             website: website ?? undefined,
             industry: row.industry ?? undefined,
             phone: row.phone ?? undefined,
@@ -137,20 +99,24 @@ export async function POST(request: NextRequest) {
               ? (row.sourceRowJson as Prisma.InputJsonValue)
               : undefined,
           },
+          select: { id: true, companyName: true, website: true },
         });
         created++;
         newAccounts.push({
-          id: account!.id,
-          companyName: account!.companyName,
-          website: account!.website ?? null,
+          id: account.id,
+          companyName: account.companyName,
+          website: account.website ?? null,
         });
+        // Register the new account so duplicate rows in the same sheet dedupe.
+        if (account.website) accountByWebsite.set(account.website, account);
+        accountByName.set(account.companyName.toLowerCase(), account);
       } else {
         skipped++;
       }
 
       if (!account) continue;
 
-      // Save any contacts provided directly in the spreadsheet row
+      // Save any contact provided directly in the spreadsheet row
       const contactName =
         row.contactName?.trim() ||
         [row.contactFirstName, row.contactLastName].filter(Boolean).join(" ").trim() ||
@@ -158,37 +124,27 @@ export async function POST(request: NextRequest) {
 
       if (contactName || row.contactEmail) {
         const fullName = contactName || row.contactEmail!.split("@")[0];
+        const nameParts = fullName.split(" ");
 
-        const existingContact =
-          (row.contactEmail
-            ? await db.contact.findFirst({
-                where: { accountId: account.id, email: { equals: row.contactEmail, mode: "insensitive" } },
-              })
-            : null) ??
-          (await db.contact.findFirst({
-            where: { accountId: account.id, fullName: { equals: fullName, mode: "insensitive" } },
-          }));
-
-        if (!existingContact) {
-          const nameParts = fullName.split(" ");
-          await db.contact.create({
-            data: {
-              accountId: account.id,
+        const result = await saveDiscoveredContacts(
+          account.id,
+          [
+            {
               fullName,
               firstName:
                 row.contactFirstName?.trim() || (nameParts.length > 1 ? nameParts[0] : fullName),
               lastName:
                 row.contactLastName?.trim() ||
                 (nameParts.length > 1 ? nameParts.slice(1).join(" ") : null),
-              title: row.contactTitle ?? undefined,
-              email: row.contactEmail ?? undefined,
-              phone: row.contactPhone ?? undefined,
+              title: row.contactTitle,
+              email: row.contactEmail,
+              phone: row.contactPhone,
               source: "spreadsheet_import",
-              lastVerifiedAt: new Date(),
             },
-          });
-          contactsCreated++;
-        }
+          ],
+          { updateExisting: false },
+        );
+        contactsCreated += result.created;
       }
     } catch (err) {
       errors.push({
@@ -204,7 +160,14 @@ export async function POST(request: NextRequest) {
     const toEnrich = newAccounts.slice(0, MAX_ENRICH);
 
     for (const account of toEnrich) {
-      const added = await saveEnrichedContacts(account.id, account.companyName, account.website);
+      const { added, error } = await saveEnrichedContacts(
+        account.id,
+        account.companyName,
+        account.website,
+      );
+      if (error) {
+        enrichmentErrors.push({ companyName: account.companyName, error });
+      }
       if (added > 0) {
         enrichedAccounts++;
         enrichedContacts += added;
@@ -222,6 +185,7 @@ export async function POST(request: NextRequest) {
         enrichedContacts,
         cappedAt: autoEnrich && newAccounts.length > MAX_ENRICH ? MAX_ENRICH : null,
         errors,
+        enrichmentErrors,
       },
       message: `Import complete: ${created} accounts created, ${skipped} skipped, ${contactsCreated + enrichedContacts} contacts added.`,
     },

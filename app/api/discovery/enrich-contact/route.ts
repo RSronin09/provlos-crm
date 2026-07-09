@@ -2,6 +2,7 @@ import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { enrichContactByName } from "@/lib/decision-makers";
+import { parseDomain } from "@/lib/text";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -9,7 +10,7 @@ export async function POST(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
   const contactId = typeof body?.contactId === "string" ? body.contactId : null;
 
   if (!contactId) {
@@ -27,18 +28,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Contact not found" }, { status: 404 });
   }
 
-  const domain = contact.account.website
-    ? (() => {
-        try {
-          const url = contact.account.website!.startsWith("http")
-            ? contact.account.website!
-            : `https://${contact.account.website}`;
-          return new URL(url).hostname.replace(/^www\./, "");
-        } catch {
-          return null;
-        }
-      })()
-    : null;
+  const domain = parseDomain(contact.account.website);
 
   const match = await enrichContactByName({
     firstName: contact.firstName,

@@ -2,6 +2,7 @@ import { unauthorizedResponse, zodErrorResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { addDiscoveredLeadSchema } from "@/lib/crm-validation";
 import { db } from "@/lib/db";
+import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -9,7 +10,7 @@ export async function POST(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
   const parsed = addDiscoveredLeadSchema.safeParse(body);
   if (!parsed.success) {
     return zodErrorResponse(parsed.error);
@@ -36,34 +37,7 @@ export async function POST(request: NextRequest) {
       },
     }));
 
-  for (const contact of contacts) {
-    const existing =
-      (contact.email
-        ? await db.contact.findFirst({
-            where: {
-              accountId: account.id,
-              email: { equals: contact.email, mode: "insensitive" },
-            },
-          })
-        : null) ??
-      (await db.contact.findFirst({
-        where: {
-          accountId: account.id,
-          fullName: { equals: contact.fullName, mode: "insensitive" },
-          title: contact.title ?? undefined,
-        },
-      }));
-
-    if (existing) continue;
-
-    await db.contact.create({
-      data: {
-        accountId: account.id,
-        ...contact,
-        lastVerifiedAt: new Date(),
-      },
-    });
-  }
+  await saveDiscoveredContacts(account.id, contacts, { updateExisting: true });
 
   const savedContacts = await db.contact.findMany({
     where: { accountId: account.id },

@@ -2,6 +2,8 @@ import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { lookupDecisionMakers, enrichContactByName } from "@/lib/decision-makers";
+import { saveDiscoveredContacts } from "@/lib/save-contacts";
+import { parseDomain } from "@/lib/text";
 import { NextRequest } from "next/server";
 
 // How many existing contacts (with no email) to attempt Apollo person-match on.
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
     return unauthorizedResponse();
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
   const accountId = typeof body?.accountId === "string" ? body.accountId : null;
 
   if (!accountId) {
@@ -47,18 +49,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Account not found" }, { status: 404 });
   }
 
-  const domain = account.website
-    ? (() => {
-        try {
-          const url = account.website.startsWith("http")
-            ? account.website
-            : `https://${account.website}`;
-          return new URL(url).hostname.replace(/^www\./, "");
-        } catch {
-          return null;
-        }
-      })()
-    : null;
+  const domain = parseDomain(account.website);
 
   let added = 0;
   let updated = 0;
@@ -114,6 +105,7 @@ export async function POST(request: NextRequest) {
   // Phase 2: Company-level discovery — find NEW people at this company
   // that are not yet in our contacts list.
   // -----------------------------------------------------------------------
+  let discoveryError: string | null = null;
   try {
     const { contacts: discovered, resolvedWebsite, providersUsed: usedProviders } =
       await lookupDecisionMakers({
@@ -123,42 +115,9 @@ export async function POST(request: NextRequest) {
 
     usedProviders.forEach((p) => providersUsed.add(p));
 
-    const existingEmails = new Set(
-      account.contacts.map((c) => c.email?.toLowerCase()).filter(Boolean),
-    );
-    const existingNames = new Set(
-      account.contacts.map((c) => c.fullName?.toLowerCase()).filter(Boolean),
-    );
-
-    for (const contact of discovered) {
-      const fullName =
-        contact.fullName ||
-        [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-      if (!fullName) continue;
-
-      // Skip if we already have this person (by email or name)
-      if (contact.email && existingEmails.has(contact.email.toLowerCase())) continue;
-      if (existingNames.has(fullName.toLowerCase())) continue;
-
-      await db.contact.create({
-        data: {
-          accountId: account.id,
-          fullName,
-          firstName: contact.firstName ?? undefined,
-          lastName: contact.lastName ?? undefined,
-          title: contact.title ?? undefined,
-          department: contact.department ?? undefined,
-          email: contact.email ?? undefined,
-          phone: contact.phone ?? undefined,
-          linkedinUrl: contact.linkedinUrl ?? undefined,
-          confidenceScore: contact.confidenceScore ?? undefined,
-          source: contact.source ?? "enrichment",
-          lastVerifiedAt: new Date(),
-        },
-      });
-      added++;
-      existingNames.add(fullName.toLowerCase());
-    }
+    const saved = await saveDiscoveredContacts(account.id, discovered, { updateExisting: true });
+    added += saved.created;
+    updated += saved.updated;
 
     // Update account website if resolved
     if (resolvedWebsite && !account.website) {
@@ -167,8 +126,11 @@ export async function POST(request: NextRequest) {
         data: { website: resolvedWebsite },
       });
     }
-  } catch {
-    // Phase 2 is non-fatal — Phase 1 results are already saved
+  } catch (error) {
+    // Phase 2 is non-fatal — Phase 1 results are already saved — but the
+    // failure should be visible to the caller, not silently swallowed.
+    discoveryError = error instanceof Error ? error.message : "Company-level discovery failed";
+    console.error(`Company-level discovery failed for ${account.companyName}:`, discoveryError);
   }
 
   return Response.json({
@@ -179,7 +141,8 @@ export async function POST(request: NextRequest) {
       contactsUpdated: updated,
       totalProcessed: contactsNeedingEnrichment.length,
       providersUsed: [...providersUsed],
+      discoveryError,
     },
-    message: `Enrichment complete: ${updated} contacts updated with email/phone, ${added} new contacts found for ${account.companyName}.`,
+    message: `Enrichment complete: ${updated} contacts updated with email/phone, ${added} new contacts found for ${account.companyName}.${discoveryError ? ` Note: company-level discovery failed (${discoveryError}).` : ""}`,
   });
 }
