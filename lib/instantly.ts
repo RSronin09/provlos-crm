@@ -292,7 +292,8 @@ export function buildHealthcareCountySearchFilters(options: {
   const titles = options.titles ?? HEALTHCARE_FACILITY_TITLES;
 
   return {
-    locations,
+    // Object include/exclude form — the plain-array form is documented as legacy.
+    locations: { include: locations },
     location_mode: options.locationMode ?? "company",
     industry: { include: ["Healthcare, Pharmaceuticals, & Biotech"] },
     subIndustry: { include: [...INSTANTLY_HEALTHCARE_SUB_INDUSTRIES] },
@@ -302,6 +303,83 @@ export function buildHealthcareCountySearchFilters(options: {
     show_one_lead_per_company: true,
     skip_owned_leads: true,
   };
+}
+
+/** One relaxation step in a zero-match diagnosis. */
+export type DiagnosisStep = {
+  key: string;
+  label: string;
+  count: number | null;
+  error?: string;
+};
+
+/**
+ * Pinpoints which filter is zeroing out a SuperSearch by re-running the
+ * (free) count with progressively fewer filters. Steps are cumulative: each
+ * one removes an additional filter, so the first step with matches identifies
+ * the filter that eliminated everything.
+ */
+export async function diagnoseSearchFilters(full: InstantlySearchFilters): Promise<DiagnosisStep[]> {
+  const variants: { key: string; label: string; filters: InstantlySearchFilters }[] = [
+    { key: "full", label: "All filters as configured", filters: full },
+  ];
+
+  let current = full;
+
+  if (current.keyword_filter) {
+    current = { ...current };
+    delete current.keyword_filter;
+    variants.push({ key: "no_keyword", label: "Without the keyword filter", filters: current });
+  }
+
+  if (current.title) {
+    current = { ...current };
+    delete current.title;
+    variants.push({ key: "no_titles", label: "Also without job titles", filters: current });
+  }
+
+  if (current.subIndustry) {
+    current = { ...current };
+    delete current.subIndustry;
+    variants.push({
+      key: "no_sub_industry",
+      label: "Also without healthcare sub-industries (industry only)",
+      filters: current,
+    });
+  }
+
+  if (current.location_mode === "company") {
+    variants.push({
+      key: "contact_location",
+      label: "Same, but matching the person's location instead of company HQ",
+      filters: { ...current, location_mode: "contact" },
+    });
+  }
+
+  if (current.locations) {
+    const noLocation = { ...current };
+    delete noLocation.locations;
+    variants.push({
+      key: "no_location",
+      label: "Also without any location filter (sanity check)",
+      filters: noLocation,
+    });
+  }
+
+  const steps: DiagnosisStep[] = [];
+  // Sequential on purpose — these are free count calls, but there's no need
+  // to hammer the API in parallel.
+  for (const variant of variants) {
+    const result = await countLeadsFromSuperSearch(variant.filters);
+    steps.push({
+      key: variant.key,
+      label: variant.label,
+      count: result.ok ? result.count : null,
+      ...(result.ok ? {} : { error: result.error }),
+    });
+  }
+
+  return steps;
 }
 
 /** Maps a preview-stage Instantly lead (no email yet) into a human-readable

@@ -223,7 +223,15 @@ const employeeCountRangeSchema = z.object({
 });
 
 export const instantlySearchFiltersSchema = z.object({
-  locations: z.array(instantlyLocationSchema).optional(),
+  locations: z
+    .union([
+      z.array(instantlyLocationSchema),
+      z.object({
+        include: z.array(instantlyLocationSchema).optional(),
+        exclude: z.array(instantlyLocationSchema).optional(),
+      }),
+    ])
+    .optional(),
   location_mode: z.enum(["contact", "company"]).optional(),
   industry: z.object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() }).optional(),
   subIndustry: z.object({ include: z.array(z.string()).optional(), exclude: z.array(z.string()).optional() }).optional(),

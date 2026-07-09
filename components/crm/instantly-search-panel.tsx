@@ -21,6 +21,13 @@ type PreviewLead = {
   location?: string;
 };
 
+type DiagnosisStep = {
+  key: string;
+  label: string;
+  count: number | null;
+  error?: string;
+};
+
 export function InstantlySearchPanel() {
   const [adminToken, handleTokenChange] = useAdminToken();
   const [counties, setCounties] = useState<string[]>(COUNTY_OPTIONS);
@@ -34,7 +41,8 @@ export function InstantlySearchPanel() {
 
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const [previewLeads, setPreviewLeads] = useState<PreviewLead[] | null>(null);
-  const [busy, setBusy] = useState<"count" | "preview" | "search" | "import" | null>(null);
+  const [diagnosis, setDiagnosis] = useState<DiagnosisStep[] | null>(null);
+  const [busy, setBusy] = useState<"count" | "preview" | "search" | "import" | "diagnose" | null>(null);
   const [message, setMessage] = useState<Message>(null);
 
   function toggleCounty(county: string) {
@@ -82,6 +90,30 @@ export function InstantlySearchPanel() {
       } else {
         setMessage({ type: "success", text: `${count} leads match this search.` });
       }
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function diagnoseZeroMatches() {
+    try {
+      setBusy("diagnose");
+      setMessage({ type: "info", text: "Re-running the count with fewer filters to find the culprit…" });
+      const payload = await authPost("/api/discovery/instantly/diagnose", buildRequestBody());
+      const steps: DiagnosisStep[] = payload.data?.steps ?? [];
+      setDiagnosis(steps);
+      const firstHit = steps.find((s) => (s.count ?? 0) > 0);
+      setMessage(
+        firstHit
+          ? { type: "success", text: `Diagnosis complete — matches appear at: "${firstHit.label}".` }
+          : {
+              type: "error",
+              text:
+                "Even the broadest variant returned 0. That points to the API key, workspace plan, or the location/industry filters rather than your keyword or title.",
+            },
+      );
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
     } finally {
@@ -286,7 +318,48 @@ export function InstantlySearchPanel() {
           {matchCount !== null ? (
             <span className="text-sm text-slate-500">~{matchCount} leads match</span>
           ) : null}
+
+          {matchCount === 0 ? (
+            <button
+              type="button"
+              onClick={diagnoseZeroMatches}
+              disabled={busy !== null}
+              className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 disabled:opacity-60 hover:bg-amber-100 transition-colors"
+            >
+              {busy === "diagnose" ? "Diagnosing…" : "Diagnose 0 matches (free)"}
+            </button>
+          ) : null}
         </div>
+
+        {diagnosis ? (
+          <div className="rounded-lg border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Diagnosis — each row removes one more filter
+            </div>
+            <ul className="divide-y divide-slate-100 text-sm">
+              {diagnosis.map((step) => (
+                <li key={step.key} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="text-slate-700">{step.label}</span>
+                  {step.error ? (
+                    <span className="shrink-0 text-xs text-rose-600" title={step.error}>error</span>
+                  ) : (
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        (step.count ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
+                      }`}
+                    >
+                      {step.count ?? "—"} leads
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+              The first row with a non-zero count tells you which removed filter was eliminating everything —
+              loosen that one in the form above and re-check.
+            </p>
+          </div>
+        ) : null}
 
         {previewLeads && previewLeads.length > 0 ? (
           <div className="overflow-x-auto rounded-lg border border-slate-200">
