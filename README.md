@@ -81,9 +81,12 @@ npm run prisma:deploy
    ```
    npm run vercel-build
    ```
-   This runs `prisma migrate deploy && next build` so migrations are applied on every deploy.
+   This runs `scripts/migrate-deploy.mjs` (then `next build`) so migrations are applied on every production deploy. The script:
+   - only migrates on **production** builds (preview/branch builds skip migrations so they never race or mutate the production schema);
+   - automatically uses Neon's **direct** (non-pooled) host for migrations — Prisma's migration advisory lock does not work through Neon's `-pooler` endpoint (error P1002). If `DIRECT_DATABASE_URL`, `DATABASE_URL_UNPOOLED`, or `POSTGRES_URL_NON_POOLING` is set it uses that; otherwise it derives the direct host by stripping `-pooler` from `DATABASE_URL`;
+   - retries up to 3 times to ride out suspended Neon computes waking up.
 
-3. Deploy. The `vercel-build` script runs migrations against the production database before each build.
+3. Deploy. Migrations run against the production database before each production build.
 
 > **Troubleshooting "Application error"**: If you see this on Vercel, the two most common causes are:
 > - `DATABASE_URL` is not set → add it in Vercel env vars
