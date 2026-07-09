@@ -6,7 +6,7 @@
     "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "prisma migrate deploy && next build",
+    "vercel-build": "node scripts/migrate-deploy.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
