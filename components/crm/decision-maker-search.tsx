@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useAdminToken } from "@/lib/use-admin-token";
+import { FormEvent, useState } from "react";
 
 type Contact = {
   id: string;
@@ -20,8 +21,6 @@ type SearchResult = {
   source: string;
   note?: string;
 };
-
-const ADMIN_TOKEN_KEY = "crm_admin_token";
 
 function confidenceBadge(score: number | null) {
   if (score === null) return null;
@@ -50,7 +49,7 @@ function sourceBadge(source: string) {
 }
 
 export function DecisionMakerSearch() {
-  const [adminToken, setAdminToken] = useState("");
+  const [adminToken, handleTokenChange] = useAdminToken();
   const [companyName, setCompanyName] = useState("");
   const [website, setWebsite] = useState("");
   const [state, setState] = useState("");
@@ -60,21 +59,6 @@ export function DecisionMakerSearch() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
-
-  // Persist admin token to localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem(ADMIN_TOKEN_KEY);
-    if (stored) setAdminToken(stored);
-  }, []);
-
-  function handleTokenChange(value: string) {
-    setAdminToken(value);
-    if (value) {
-      localStorage.setItem(ADMIN_TOKEN_KEY, value);
-    } else {
-      localStorage.removeItem(ADMIN_TOKEN_KEY);
-    }
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -8,7 +8,7 @@ function KeyStatus({ name, value }: { name: string; value: string | undefined })
       <div>
         <p className="text-sm font-medium text-slate-800 font-mono">{name}</p>
         <p className="text-xs text-slate-500 mt-0.5">
-          {isSet ? `Configured (${value!.slice(0, 4)}${"•".repeat(8)})` : "Not set"}
+          {isSet ? "Configured" : "Not set"}
         </p>
       </div>
       <span

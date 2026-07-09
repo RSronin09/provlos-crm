@@ -1,12 +1,20 @@
+import { unauthorizedResponse } from "@/lib/api";
+import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
+import { cleanPersonName } from "@/lib/decision-makers";
+import { parseDomain } from "@/lib/text";
 import { NextRequest } from "next/server";
 
-// Diagnostic endpoint — shows exactly what gets sent to each API and what comes back
+// Diagnostic endpoint — shows exactly what gets sent to each API and what comes back.
+// Returns contact PII and provider request/response details, so it is admin-gated.
 // Usage: POST /api/discovery/debug-enrich { "contactId": "..." }
-// Remove or restrict this endpoint before going to production with sensitive data
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  if (!isAdminRequest(request)) {
+    return unauthorizedResponse();
+  }
+
+  const body = await request.json().catch(() => null);
   const contactId = typeof body?.contactId === "string" ? body.contactId : null;
 
   if (!contactId) {
@@ -22,16 +30,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Contact not found" }, { status: 404 });
   }
 
-  const domain = contact.account.website
-    ? (() => {
-        try {
-          const url = contact.account.website!.startsWith("http")
-            ? contact.account.website!
-            : `https://${contact.account.website}`;
-          return new URL(url).hostname.replace(/^www\./, "");
-        } catch { return null; }
-      })()
-    : null;
+  const domain = parseDomain(contact.account.website);
 
   const diagnostics: Record<string, unknown> = {
     contact: {
@@ -58,32 +57,21 @@ export async function POST(request: NextRequest) {
     },
   };
 
-  // --- Name cleaning ---
+  // --- Name cleaning (same logic used by real enrichment via cleanPersonName) ---
   const rawName = contact.fullName ?? [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-  const CREDENTIAL_PATTERN = /\b(?:ma|mha|mba|ms|bs|ba|rn|bsn|msn|lpn|np|pa|md|do|dvm|phd|edd|jd|cpa|cfa|cfp|coo|ceo|cfo|nha|crcst|lnha|fache|facc|chfp|chc|sphr|phr|shrm|six sigma|pmp|ccm|cmc|cadc|lcsw|lmft|lpc)\b/gi;
-  let cleanedName = rawName.trim();
-  cleanedName = cleanedName.split(/\s+[-–—]\s+/)[0] ?? cleanedName;
-  cleanedName = cleanedName.replace(/,\s*(?:[A-Z]{1,6},?\s*)+$/i, "").trim();
-  cleanedName = cleanedName.replace(CREDENTIAL_PATTERN, "").trim();
-  cleanedName = cleanedName.replace(/[,.\s]+$/, "").replace(/\s{2,}/g, " ").trim();
-  const parts = cleanedName.split(/\s+/).filter((p: string) => /^[A-Za-z'-]+$/.test(p));
-  const looksLikePerson = parts.length >= 1 && cleanedName.length >= 3;
-  const titleWords = ["operations","supervisor","manager","director","administrator","coordinator","specialist","technician","nurse","nursing","plant","weekend","regional","assistant","associate","senior","junior"];
-  const isTitleNotName = titleWords.some((w: string) => cleanedName.toLowerCase().startsWith(w));
+  const cleaned = cleanPersonName(rawName);
+  const nameUsable = !!cleaned.fullName;
 
   diagnostics.nameCleaning = {
     rawName,
-    cleanedName,
-    parts,
-    looksLikePerson,
-    isTitleNotName,
-    wouldSkip: !looksLikePerson || isTitleNotName,
-    firstName: parts[0] ?? null,
-    lastName: parts.length > 1 ? parts.slice(1).join(" ") : null,
+    cleanedName: cleaned.fullName,
+    firstName: cleaned.firstName,
+    lastName: cleaned.lastName,
+    wouldSkip: !nameUsable,
   };
 
   // --- Apollo test ---
-  if (process.env.APOLLO_API_KEY && looksLikePerson && !isTitleNotName) {
+  if (process.env.APOLLO_API_KEY && nameUsable) {
     const apolloBody: Record<string, unknown> = {
       organization_name: contact.account.companyName,
       reveal_personal_emails: false,
@@ -92,8 +80,8 @@ export async function POST(request: NextRequest) {
     if (contact.linkedinUrl) {
       apolloBody.linkedin_url = contact.linkedinUrl;
     } else {
-      apolloBody.first_name = parts[0] ?? null;
-      apolloBody.last_name = parts.length > 1 ? parts.slice(1).join(" ") : null;
+      apolloBody.first_name = cleaned.firstName;
+      apolloBody.last_name = cleaned.lastName;
     }
     if (domain) apolloBody.domain = domain;
 
@@ -122,7 +110,7 @@ export async function POST(request: NextRequest) {
           signal: AbortSignal.timeout(10_000),
         });
         diagnostics.apolloLegacyStatus = legacyRes.status;
-        const legacyRaw = await legacyRes.json();
+        const legacyRaw = await legacyRes.json().catch(() => ({}));
         diagnostics.apolloLegacyResponse = {
           hasPerson: !!legacyRaw?.person,
           email: legacyRaw?.person?.email ?? null,
@@ -151,20 +139,18 @@ export async function POST(request: NextRequest) {
   } else {
     diagnostics.apolloSkipped = !process.env.APOLLO_API_KEY
       ? "No APOLLO_API_KEY"
-      : isTitleNotName
-        ? "Name looks like a job title, not a person"
-        : "Name failed validation";
+      : "Name failed validation (job title or non-person string)";
   }
 
   // --- PDL test ---
-  if (process.env.PDL_API_KEY && looksLikePerson && !isTitleNotName) {
+  if (process.env.PDL_API_KEY && nameUsable) {
     const pdlParams = new URLSearchParams();
     pdlParams.set("min_likelihood", "6"); // PDL uses 0–10 integer scale
     if (contact.linkedinUrl) {
       pdlParams.set("profile", contact.linkedinUrl.replace(/^https?:\/\//, ""));
     } else {
-      if (parts[0]) pdlParams.set("first_name", parts[0]);
-      if (parts.length > 1) pdlParams.set("last_name", parts.slice(1).join(" "));
+      if (cleaned.firstName) pdlParams.set("first_name", cleaned.firstName);
+      if (cleaned.lastName) pdlParams.set("last_name", cleaned.lastName);
       pdlParams.set("company", contact.account.companyName);
       if (domain) pdlParams.set("company_domain", domain);
     }
@@ -180,7 +166,7 @@ export async function POST(request: NextRequest) {
         },
       );
 
-      const raw = await res.json();
+      const raw = await res.json().catch(() => ({}));
       diagnostics.pdlStatus = res.status;
       diagnostics.pdlResponse = {
         likelihood: raw?.likelihood ?? null,
@@ -198,9 +184,7 @@ export async function POST(request: NextRequest) {
   } else {
     diagnostics.pdlSkipped = !process.env.PDL_API_KEY
       ? "No PDL_API_KEY"
-      : isTitleNotName
-        ? "Name looks like a job title"
-        : "Name failed validation";
+      : "Name failed validation (job title or non-person string)";
   }
 
   return Response.json({ diagnostics });

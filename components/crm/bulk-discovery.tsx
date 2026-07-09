@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminToken } from "@/lib/use-admin-token";
 import { useEffect, useState } from "react";
 
 type Candidate = {
@@ -14,8 +15,6 @@ type Candidate = {
   status: string;
   account: { id: string; companyName: string } | null;
 };
-
-const ADMIN_TOKEN_KEY = "crm_admin_token";
 
 const STATUS_COLORS: Record<string, string> = {
   NEW: "bg-blue-100 text-blue-700",
@@ -34,7 +33,7 @@ const SIGNAL_COLORS: Record<string, string> = {
 };
 
 export function BulkDiscovery() {
-  const [adminToken, setAdminToken] = useState("");
+  const [adminToken, handleTokenChange] = useAdminToken();
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [region, setRegion] = useState("");
@@ -45,20 +44,9 @@ export function BulkDiscovery() {
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem(ADMIN_TOKEN_KEY);
-    if (stored) setAdminToken(stored);
-  }, []);
-
-  useEffect(() => {
     fetchCandidates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
-
-  function handleTokenChange(value: string) {
-    setAdminToken(value);
-    if (value) localStorage.setItem(ADMIN_TOKEN_KEY, value);
-    else localStorage.removeItem(ADMIN_TOKEN_KEY);
-  }
 
   async function fetchCandidates() {
     setLoadingCandidates(true);

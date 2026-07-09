@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useAdminToken } from "@/lib/use-admin-token";
+import { useState } from "react";
 import {
   FLORIDA_COUNTY_CITIES,
   HEALTHCARE_FACILITY_KEYWORDS,
@@ -8,14 +9,12 @@ import {
   INSTANTLY_EMPLOYEE_COUNT_BRACKETS,
 } from "@/lib/instantly-constants";
 
-const ADMIN_TOKEN_KEY = "crm_admin_token";
-
 const COUNTY_OPTIONS = Object.keys(FLORIDA_COUNTY_CITIES);
 
 type Message = { type: "success" | "error" | "info"; text: string } | null;
 
 export function InstantlySearchPanel() {
-  const [adminToken, setAdminToken] = useState("");
+  const [adminToken, handleTokenChange] = useAdminToken();
   const [counties, setCounties] = useState<string[]>(COUNTY_OPTIONS);
   const [keywords, setKeywords] = useState(HEALTHCARE_FACILITY_KEYWORDS.join(", "));
   const [titles, setTitles] = useState(HEALTHCARE_FACILITY_TITLES.join(", "));
@@ -27,17 +26,6 @@ export function InstantlySearchPanel() {
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const [busy, setBusy] = useState<"count" | "search" | "import" | null>(null);
   const [message, setMessage] = useState<Message>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(ADMIN_TOKEN_KEY);
-    if (stored) setAdminToken(stored);
-  }, []);
-
-  function handleTokenChange(value: string) {
-    setAdminToken(value);
-    if (value) localStorage.setItem(ADMIN_TOKEN_KEY, value);
-    else localStorage.removeItem(ADMIN_TOKEN_KEY);
-  }
 
   function toggleCounty(county: string) {
     setCounties((prev) => (prev.includes(county) ? prev.filter((c) => c !== county) : [...prev, county]));
