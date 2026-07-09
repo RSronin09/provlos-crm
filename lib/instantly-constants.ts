@@ -95,8 +95,10 @@ export const HEALTHCARE_FACILITY_TITLES = [
   "Director of Support Services",
 ];
 
-/** Free-text keyword fragments matched against company descriptions/pages —
- *  tune this list as real search results come back. */
+/** Suggested keyword phrases for the optional keyword filter. Instantly's
+ *  keyword_filter takes ONE literal include string (no OR syntax) that is
+ *  ANDed with every other filter, so use at most one of these per search —
+ *  never a joined list. */
 export const HEALTHCARE_FACILITY_KEYWORDS = [
   "nursing home",
   "skilled nursing",

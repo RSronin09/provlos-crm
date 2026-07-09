@@ -240,9 +240,13 @@ export const instantlySearchFiltersSchema = z.object({
 
 export const instantlyCountSchema = z.object({
   counties: z.array(z.string()).optional(),
-  keywords: z.array(z.string()).optional(),
+  // Instantly's keyword_filter takes a single include string and a single
+  // exclude string — not a list. Passed through verbatim when provided.
+  keywordInclude: z.string().optional(),
+  keywordExclude: z.string().optional(),
   titles: z.array(z.string()).optional(),
   employeeCount: z.array(z.string()).optional(),
+  locationMode: z.enum(["contact", "company"]).optional(),
   filters: instantlySearchFiltersSchema.optional(),
 });
 

@@ -4,7 +4,6 @@ import { useAdminToken } from "@/lib/use-admin-token";
 import { useState } from "react";
 import {
   FLORIDA_COUNTY_CITIES,
-  HEALTHCARE_FACILITY_KEYWORDS,
   HEALTHCARE_FACILITY_TITLES,
   INSTANTLY_EMPLOYEE_COUNT_BRACKETS,
 } from "@/lib/instantly-constants";
@@ -13,10 +12,20 @@ const COUNTY_OPTIONS = Object.keys(FLORIDA_COUNTY_CITIES);
 
 type Message = { type: "success" | "error" | "info"; text: string } | null;
 
+type PreviewLead = {
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  jobTitle?: string;
+  companyName?: string;
+  location?: string;
+};
+
 export function InstantlySearchPanel() {
   const [adminToken, handleTokenChange] = useAdminToken();
   const [counties, setCounties] = useState<string[]>(COUNTY_OPTIONS);
-  const [keywords, setKeywords] = useState(HEALTHCARE_FACILITY_KEYWORDS.join(", "));
+  const [keywordInclude, setKeywordInclude] = useState("");
+  const [keywordExclude, setKeywordExclude] = useState("");
   const [titles, setTitles] = useState(HEALTHCARE_FACILITY_TITLES.join(", "));
   const [employeeCount, setEmployeeCount] = useState<string[]>([]);
   const [limit, setLimit] = useState(50);
@@ -24,7 +33,8 @@ export function InstantlySearchPanel() {
   const [resourceId, setResourceId] = useState<string | null>(null);
 
   const [matchCount, setMatchCount] = useState<number | null>(null);
-  const [busy, setBusy] = useState<"count" | "search" | "import" | null>(null);
+  const [previewLeads, setPreviewLeads] = useState<PreviewLead[] | null>(null);
+  const [busy, setBusy] = useState<"count" | "preview" | "search" | "import" | null>(null);
   const [message, setMessage] = useState<Message>(null);
 
   function toggleCounty(county: string) {
@@ -38,7 +48,8 @@ export function InstantlySearchPanel() {
   function buildRequestBody() {
     return {
       counties,
-      keywords: keywords.split(",").map((k) => k.trim()).filter(Boolean),
+      keywordInclude: keywordInclude.trim() || undefined,
+      keywordExclude: keywordExclude.trim() || undefined,
       titles: titles.split(",").map((t) => t.trim()).filter(Boolean),
       employeeCount: employeeCount.length ? employeeCount : undefined,
     };
@@ -56,16 +67,45 @@ export function InstantlySearchPanel() {
   }
 
   async function checkCount() {
-    if (!adminToken) {
-      setMessage({ type: "error", text: "Admin token is required." });
-      return;
-    }
     try {
       setBusy("count");
       setMessage({ type: "info", text: "Checking how many leads match…" });
       const payload = await authPost("/api/discovery/instantly/count", buildRequestBody());
-      setMatchCount(payload.data?.count ?? 0);
-      setMessage({ type: "success", text: `${payload.data?.count ?? 0} leads match this search.` });
+      const count = payload.data?.count ?? 0;
+      setMatchCount(count);
+      if (count === 0) {
+        setMessage({
+          type: "info",
+          text:
+            "0 leads match. Filters are combined with AND — try clearing the keyword filter, removing some job titles, or selecting more counties, then re-check.",
+        });
+      } else {
+        setMessage({ type: "success", text: `${count} leads match this search.` });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function previewMatches() {
+    try {
+      setBusy("preview");
+      setMessage({ type: "info", text: "Fetching a free sample of matching leads…" });
+      const payload = await authPost("/api/discovery/instantly/preview", buildRequestBody());
+      const leads: PreviewLead[] = payload.data?.leads ?? [];
+      setPreviewLeads(leads);
+      setMatchCount(payload.data?.totalCount ?? leads.length);
+      setMessage(
+        leads.length
+          ? { type: "success", text: `Showing ${leads.length} sample leads (${payload.data?.totalCount ?? "?"} total match).` }
+          : {
+              type: "info",
+              text:
+                "No sample leads returned. Filters are combined with AND — try clearing the keyword filter or removing some job titles.",
+            },
+      );
     } catch (error) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "Unknown error" });
     } finally {
@@ -74,10 +114,6 @@ export function InstantlySearchPanel() {
   }
 
   async function startEnrichment() {
-    if (!adminToken) {
-      setMessage({ type: "error", text: "Admin token is required." });
-      return;
-    }
     try {
       setBusy("search");
       setMessage({ type: "info", text: "Starting enrichment in Instantly…" });
@@ -93,10 +129,6 @@ export function InstantlySearchPanel() {
   }
 
   async function importResults() {
-    if (!adminToken) {
-      setMessage({ type: "error", text: "Admin token is required." });
-      return;
-    }
     if (!listId.trim()) {
       setMessage({ type: "error", text: "Enter the list/resource ID from the enrichment step above." });
       return;
@@ -138,7 +170,7 @@ export function InstantlySearchPanel() {
             value={adminToken}
             onChange={(e) => handleTokenChange(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
-            placeholder="Stored in browser after first entry"
+            placeholder="Only needed if ADMIN_TOKEN is set on the server"
           />
         </label>
 
@@ -157,26 +189,43 @@ export function InstantlySearchPanel() {
           </p>
         </div>
 
+        <label className="text-sm block">
+          <span className="mb-1 block font-medium text-slate-700">Target job titles (comma-separated)</span>
+          <textarea
+            value={titles}
+            onChange={(e) => setTitles(e.target.value)}
+            rows={3}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+          />
+        </label>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm block">
-            <span className="mb-1 block font-medium text-slate-700">Facility keywords (comma-separated)</span>
-            <textarea
-              value={keywords}
-              onChange={(e) => setKeywords(e.target.value)}
-              rows={3}
+            <span className="mb-1 block font-medium text-slate-700">Keyword filter — include (optional)</span>
+            <input
+              type="text"
+              value={keywordInclude}
+              onChange={(e) => setKeywordInclude(e.target.value)}
+              placeholder='e.g. "assisted living" — leave empty for broadest results'
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
             />
           </label>
           <label className="text-sm block">
-            <span className="mb-1 block font-medium text-slate-700">Target job titles (comma-separated)</span>
-            <textarea
-              value={titles}
-              onChange={(e) => setTitles(e.target.value)}
-              rows={3}
+            <span className="mb-1 block font-medium text-slate-700">Keyword filter — exclude (optional)</span>
+            <input
+              type="text"
+              value={keywordExclude}
+              onChange={(e) => setKeywordExclude(e.target.value)}
+              placeholder="e.g. staffing"
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
             />
           </label>
         </div>
+        <p className="-mt-2 text-xs text-slate-400">
+          Instantly matches the keyword as one literal phrase and ANDs it with every other filter, so keep it to a
+          single term (or empty). The industry + sub-industry filters already restrict results to healthcare
+          facilities.
+        </p>
 
         <div>
           <span className="mb-1 block text-sm font-medium text-slate-700">Employee count (optional)</span>
@@ -218,11 +267,20 @@ export function InstantlySearchPanel() {
 
           <button
             type="button"
+            onClick={previewMatches}
+            disabled={busy !== null}
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60 hover:bg-slate-50 transition-colors"
+          >
+            {busy === "preview" ? "Loading…" : "2. Preview Sample (free)"}
+          </button>
+
+          <button
+            type="button"
             onClick={startEnrichment}
             disabled={busy !== null}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 hover:bg-slate-800 transition-colors"
           >
-            {busy === "search" ? "Starting…" : "2. Start Search & Enrich"}
+            {busy === "search" ? "Starting…" : "3. Start Search & Enrich"}
           </button>
 
           {matchCount !== null ? (
@@ -230,9 +288,37 @@ export function InstantlySearchPanel() {
           ) : null}
         </div>
 
+        {previewLeads && previewLeads.length > 0 ? (
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Title</th>
+                  <th className="px-3 py-2">Company</th>
+                  <th className="px-3 py-2">Location</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {previewLeads.map((lead, i) => (
+                  <tr key={i} className="text-slate-700">
+                    <td className="px-3 py-2">
+                      {lead.fullName ?? [lead.firstName, lead.lastName].filter(Boolean).join(" ") ?? "—"}
+                    </td>
+                    <td className="px-3 py-2">{lead.jobTitle ?? "—"}</td>
+                    <td className="px-3 py-2">{lead.companyName ?? "—"}</td>
+                    <td className="px-3 py-2">{lead.location ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
         <p className="text-xs text-slate-400">
           Requires <code className="bg-slate-100 px-1 py-0.5 rounded">INSTANTLY_API_KEY</code> to be set on the
-          server, plus an active paid Instantly workspace plan. Step 1 is free; step 2 spends Instantly credits.
+          server, plus an active paid Instantly workspace plan. Steps 1 and 2 are free; step 3 spends Instantly
+          credits.
         </p>
       </div>
 

@@ -1,11 +1,12 @@
 import { unauthorizedResponse, zodErrorResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { instantlyCountSchema } from "@/lib/crm-validation";
-import { countLeadsFromSuperSearch, resolveSearchFilters } from "@/lib/instantly";
+import { previewLeadsFromSuperSearch, resolveSearchFilters } from "@/lib/instantly";
 import { NextRequest } from "next/server";
 
-// Free to call — no Instantly credits are spent on a count check.
-// Use this to sanity-check a search before running the (paid) enrich step.
+// Free to call — returns a sample of matching leads (name, title, company,
+// LinkedIn; no email/phone) so filters can be sanity-checked before spending
+// credits on the enrich step.
 export async function POST(request: NextRequest) {
   if (!isAdminRequest(request)) {
     return unauthorizedResponse();
@@ -18,15 +19,21 @@ export async function POST(request: NextRequest) {
   }
 
   const filters = resolveSearchFilters(parsed.data);
-  const result = await countLeadsFromSuperSearch(filters);
+  const result = await previewLeadsFromSuperSearch(filters);
 
   if (!result.ok) {
     // Echo the filters so failures can be debugged against Instantly's docs.
     return Response.json(
-      { error: result.error ?? "Instantly count request failed", filters },
+      { error: result.error ?? "Instantly preview request failed", filters },
       { status: 502 },
     );
   }
 
-  return Response.json({ data: { count: result.count, filters } });
+  return Response.json({
+    data: {
+      totalCount: result.totalCount,
+      leads: result.leads,
+      filters,
+    },
+  });
 }
