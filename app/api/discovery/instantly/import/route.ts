@@ -2,7 +2,8 @@ import { unauthorizedResponse, zodErrorResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { instantlyImportSchema } from "@/lib/crm-validation";
 import { db } from "@/lib/db";
-import { listLeadsInList } from "@/lib/instantly";
+import { listLeadsInList, type InstantlyEnrichedLead } from "@/lib/instantly";
+import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { NextRequest } from "next/server";
 
 // Pulls the (now-enriched, verified-email) leads out of an Instantly list
@@ -29,14 +30,27 @@ export async function POST(request: NextRequest) {
   let contactsCreated = 0;
   let contactsSkipped = 0;
 
+  // Group leads by company so each account is looked up (and its contacts
+  // deduped) once, instead of 2-3 queries per lead.
+  const leadsByCompany = new Map<string, { companyName: string; leads: InstantlyEnrichedLead[] }>();
   for (const lead of result.leads) {
     const companyName = lead.company_name?.trim();
     if (!companyName) continue;
+    const key = companyName.toLowerCase();
+    const group = leadsByCompany.get(key) ?? { companyName, leads: [] };
+    group.leads.push(lead);
+    leadsByCompany.set(key, group);
+  }
+
+  for (const { companyName, leads } of leadsByCompany.values()) {
+    const website = leads.find((l) => l.website)?.website ?? null;
+    const city = leads.find((l) => l.city)?.city ?? null;
+    const state = leads.find((l) => l.state)?.state ?? null;
 
     const existingAccount = await db.account.findFirst({
       where: {
         OR: [
-          ...(lead.website ? [{ website: lead.website }] : []),
+          ...(website ? [{ website }] : []),
           { companyName: { equals: companyName, mode: "insensitive" } },
         ],
       },
@@ -47,9 +61,9 @@ export async function POST(request: NextRequest) {
       (await db.account.create({
         data: {
           companyName,
-          website: lead.website ?? undefined,
-          city: lead.city ?? undefined,
-          state: lead.state ?? undefined,
+          website: website ?? undefined,
+          city: city ?? undefined,
+          state: state ?? undefined,
           industry: "Healthcare, Pharmaceuticals, & Biotech",
           stage: "TARGET",
           notes: `Imported from Instantly SuperSearch (list ${parsed.data.listId}).`,
@@ -59,41 +73,23 @@ export async function POST(request: NextRequest) {
     if (existingAccount) accountsMatched++;
     else accountsCreated++;
 
-    const fullName = [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() || null;
-
-    const existingContact =
-      (lead.email
-        ? await db.contact.findFirst({
-            where: { accountId: account.id, email: { equals: lead.email, mode: "insensitive" } },
-          })
-        : null) ??
-      (fullName
-        ? await db.contact.findFirst({
-            where: { accountId: account.id, fullName: { equals: fullName, mode: "insensitive" } },
-          })
-        : null);
-
-    if (existingContact) {
-      contactsSkipped++;
-      continue;
-    }
-
-    await db.contact.create({
-      data: {
-        accountId: account.id,
-        firstName: lead.first_name ?? undefined,
-        lastName: lead.last_name ?? undefined,
-        fullName: fullName ?? undefined,
-        title: lead.title ?? undefined,
-        email: lead.email ?? undefined,
-        phone: lead.phone ?? undefined,
-        linkedinUrl: lead.linkedin_url ?? undefined,
+    const saved = await saveDiscoveredContacts(
+      account.id,
+      leads.map((lead) => ({
+        firstName: lead.first_name,
+        lastName: lead.last_name,
+        fullName: [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() || null,
+        title: lead.title,
+        email: lead.email,
+        phone: lead.phone,
+        linkedinUrl: lead.linkedin_url,
         confidenceScore: lead.email ? 0.9 : 0.6,
         source: "instantly_supersearch",
-        lastVerifiedAt: new Date(),
-      },
-    });
-    contactsCreated++;
+      })),
+      { updateExisting: false },
+    );
+    contactsCreated += saved.created;
+    contactsSkipped += saved.skipped;
   }
 
   return Response.json({

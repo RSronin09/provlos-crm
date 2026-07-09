@@ -12,7 +12,6 @@
 
 import {
   FLORIDA_COUNTY_CITIES,
-  HEALTHCARE_FACILITY_KEYWORDS,
   HEALTHCARE_FACILITY_TITLES,
   INSTANTLY_HEALTHCARE_SUB_INDUSTRIES,
   type InstantlyEmployeeCountBracket,
@@ -261,7 +260,8 @@ export async function listLeadsInList(
 
 export function buildHealthcareCountySearchFilters(options: {
   counties: string[];
-  keywords?: string[];
+  keywordInclude?: string;
+  keywordExclude?: string;
   titles?: string[];
   employeeCount?: InstantlyEmployeeCountBracket[];
   locationMode?: "contact" | "company";
@@ -275,13 +275,29 @@ export function buildHealthcareCountySearchFilters(options: {
     return cities.map((city) => ({ city, state: "Florida", country: "United States" }) satisfies InstantlyLocation);
   });
 
+  // keyword_filter is a single literal string on Instantly's side (no OR
+  // syntax) and every filter here is ANDed together, so it is omitted unless
+  // explicitly provided — sending a joined keyword list used to zero out
+  // every search.
+  const keywordInclude = options.keywordInclude?.trim();
+  const keywordExclude = options.keywordExclude?.trim();
+  const keyword_filter =
+    keywordInclude || keywordExclude
+      ? {
+          ...(keywordInclude ? { include: keywordInclude } : {}),
+          ...(keywordExclude ? { exclude: keywordExclude } : {}),
+        }
+      : undefined;
+
+  const titles = options.titles ?? HEALTHCARE_FACILITY_TITLES;
+
   return {
     locations,
     location_mode: options.locationMode ?? "company",
     industry: { include: ["Healthcare, Pharmaceuticals, & Biotech"] },
     subIndustry: { include: [...INSTANTLY_HEALTHCARE_SUB_INDUSTRIES] },
-    title: { include: options.titles ?? HEALTHCARE_FACILITY_TITLES },
-    keyword_filter: { include: (options.keywords ?? HEALTHCARE_FACILITY_KEYWORDS).join(" OR ") },
+    ...(titles.length ? { title: { include: titles } } : {}),
+    ...(keyword_filter ? { keyword_filter } : {}),
     employeeCount: options.employeeCount,
     show_one_lead_per_company: true,
     skip_owned_leads: true,
@@ -301,23 +317,27 @@ export function describePreviewLead(lead: InstantlyPreviewLead): string {
   return parts.join(" — ");
 }
 
-/** Resolves the convenience { counties, keywords, titles, employeeCount }
+/** Resolves the convenience { counties, keyword filters, titles, employeeCount }
  *  request shape used by the discovery API routes into full search filters,
  *  falling back to a caller-supplied raw `filters` object if provided. */
 export function resolveSearchFilters(input: {
   counties?: string[];
-  keywords?: string[];
+  keywordInclude?: string;
+  keywordExclude?: string;
   titles?: string[];
   employeeCount?: string[];
+  locationMode?: "contact" | "company";
   filters?: InstantlySearchFilters;
 }): InstantlySearchFilters {
   if (input.filters) return input.filters;
 
   return buildHealthcareCountySearchFilters({
     counties: input.counties?.length ? input.counties : Object.keys(FLORIDA_COUNTY_CITIES),
-    keywords: input.keywords,
+    keywordInclude: input.keywordInclude,
+    keywordExclude: input.keywordExclude,
     titles: input.titles,
     employeeCount: input.employeeCount as InstantlyEmployeeCountBracket[] | undefined,
+    locationMode: input.locationMode,
   });
 }
 

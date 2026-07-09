@@ -49,36 +49,40 @@ export async function POST(request: NextRequest) {
           : "SERPER_API_KEY not configured.",
       });
     }
-    let createdCount = 0;
+    // Batch the dedupe check: one query for all candidates instead of one per candidate.
+    const existingMatches = await db.leadCandidate.findMany({
+      where: {
+        OR: [
+          { dedupeKey: { in: candidates.map((c) => c.dedupeKey).filter(Boolean) } },
+          {
+            companyName: { in: candidates.map((c) => c.companyName) },
+            status: { in: ["NEW", "REVIEWED", "PROMOTED"] },
+          },
+        ],
+      },
+      select: { dedupeKey: true, companyName: true, state: true, region: true, status: true },
+    });
 
-    for (const candidate of candidates) {
-      const existing = await db.leadCandidate.findFirst({
-        where: {
-          OR: [
-            ...(candidate.dedupeKey ? [{ dedupeKey: candidate.dedupeKey }] : []),
-            {
-              companyName: candidate.companyName,
-              state: candidate.state,
-              region: candidate.region,
-              status: { in: ["NEW", "REVIEWED", "PROMOTED"] },
-            },
-          ],
-        },
-      });
+    const existingDedupeKeys = new Set(
+      existingMatches.map((m) => m.dedupeKey).filter(Boolean),
+    );
+    const existingCompanyKeys = new Set(
+      existingMatches
+        .filter((m) => ["NEW", "REVIEWED", "PROMOTED"].includes(m.status))
+        .map((m) => `${m.companyName}:${m.state ?? ""}:${m.region ?? ""}`),
+    );
 
-      if (existing) {
-        continue;
-      }
+    const toCreate = candidates.filter(
+      (candidate) =>
+        !existingDedupeKeys.has(candidate.dedupeKey) &&
+        !existingCompanyKeys.has(
+          `${candidate.companyName}:${candidate.state ?? ""}:${candidate.region ?? ""}`,
+        ),
+    );
 
-      await db.leadCandidate.create({
-        data: {
-          discoveryJobId: queued.id,
-          ...candidate,
-        },
-      });
-
-      createdCount += 1;
-    }
+    const { count: createdCount } = await db.leadCandidate.createMany({
+      data: toCreate.map((candidate) => ({ discoveryJobId: queued.id, ...candidate })),
+    });
 
     const job = await db.leadDiscoveryJob.update({
       where: { id: queued.id },

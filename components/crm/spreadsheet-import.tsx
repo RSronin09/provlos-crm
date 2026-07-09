@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useAdminToken } from "@/lib/use-admin-token";
+import { useCallback, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 // ---------------------------------------------------------------------------
@@ -96,21 +97,8 @@ type ImportResult = {
 export function SpreadsheetImport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [adminToken, setAdminToken] = useState("");
+  const [adminToken, handleTokenChange] = useAdminToken();
   const [fileName, setFileName] = useState<string | null>(null);
-
-  // Persist admin token across sessions
-  useEffect(() => {
-    const stored = localStorage.getItem("crm_admin_token");
-    if (stored) setAdminToken(stored);
-  }, []);
-
-  const handleTokenChange = (val: string) => {
-    setAdminToken(val);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("crm_admin_token", val);
-    }
-  };
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [mapping, setMapping] = useState<Partial<Record<MappedField, string>>>({});

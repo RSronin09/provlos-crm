@@ -6,10 +6,9 @@ import {
   AccountType,
   getTypeConfig,
 } from "@/lib/account-types";
+import { useAdminToken } from "@/lib/use-admin-token";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-
-const ADMIN_TOKEN_KEY = "crm_admin_token";
+import { useState } from "react";
 
 const STAGE_VALUES = [
   "TARGET",
@@ -25,7 +24,7 @@ const STAGE_VALUES = [
 
 export function AddRelationshipForm() {
   const router = useRouter();
-  const [adminToken, setAdminToken] = useState("");
+  const [adminToken, handleTokenChange] = useAdminToken();
   const [accountType, setAccountType] = useState<AccountType>("CUSTOMER");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,17 +49,6 @@ export function AddRelationshipForm() {
     contractStart: "",
     contractEnd: "",
   });
-
-  useEffect(() => {
-    const stored = localStorage.getItem(ADMIN_TOKEN_KEY);
-    if (stored) setAdminToken(stored);
-  }, []);
-
-  function handleTokenChange(value: string) {
-    setAdminToken(value);
-    if (value) localStorage.setItem(ADMIN_TOKEN_KEY, value);
-    else localStorage.removeItem(ADMIN_TOKEN_KEY);
-  }
 
   const typeConfig = getTypeConfig(accountType);
 

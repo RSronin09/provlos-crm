@@ -16,7 +16,7 @@ npm install
 cp .env.example .env
 ```
 
-3. Set `DATABASE_URL` to your Neon Postgres connection string and set a strong `ADMIN_TOKEN`.
+3. Set `DATABASE_URL` to your Neon Postgres connection string. Optionally set a strong `ADMIN_TOKEN` to require authentication for write operations.
 
 4. Generate Prisma Client:
 
@@ -39,11 +39,15 @@ npm run dev
 ## Env Vars
 
 - `DATABASE_URL`: required, Postgres connection string (Neon in local/dev/prod).
-- `ADMIN_TOKEN`: required for write operations on API routes. Send via `x-admin-token` header.
-- `SERPER_API_KEY`: optional but recommended for live web search in decision-maker lookup.
+- `ADMIN_TOKEN`: optional. When set, write API routes require the token via the `x-admin-token` header or the `crm_admin_token` cookie (set automatically when you enter the token in the UI's Admin Token field). When unset, writes are open — only suitable for private/internal deployments.
+- `APOLLO_API_KEY`: optional, primary provider for B2B contact search + email/phone enrichment.
+- `APOLLO_PLAN_ENABLED`: set to `true` if your Apollo plan includes `people/match` (enables single-contact enrichment).
+- `PDL_API_KEY`: optional, People Data Labs person-enrichment fallback (healthcare & non-B2B industries).
+- `SERPER_API_KEY`: optional but recommended for live web search in discovery and decision-maker lookup.
 - `HUNTER_API_KEY`: optional but recommended for domain email discovery in decision-maker lookup.
+- `INSTANTLY_API_KEY`: optional, enables the Instantly SuperSearch lead finder.
 
-Read endpoints are currently open. Write endpoints enforce `x-admin-token`.
+Read endpoints are always open.
 
 ## DB Migrate
 
@@ -67,9 +71,11 @@ npm run prisma:deploy
 
 1. In Vercel Project Settings → **Environment Variables**, add:
    - `DATABASE_URL` — your Neon Postgres connection string (include `?sslmode=require`, e.g. `postgresql://user:pass@host/db?sslmode=require`)
-   - `ADMIN_TOKEN` — a strong secret used for write operations (sent via `x-admin-token` header)
+   - `ADMIN_TOKEN` — (recommended) a strong secret required for write operations
+   - `APOLLO_API_KEY` / `PDL_API_KEY` — (optional) contact enrichment providers
    - `SERPER_API_KEY` — (optional) for live web search in lead discovery
    - `HUNTER_API_KEY` — (optional) for domain email discovery
+   - `INSTANTLY_API_KEY` — (optional) for the Instantly SuperSearch lead finder
 
 2. In Vercel Project Settings → **Build & Development Settings**, set the **Build Command** to:
    ```

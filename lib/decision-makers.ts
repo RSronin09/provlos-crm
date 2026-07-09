@@ -1,3 +1,5 @@
+import { parseDomain } from "@/lib/text";
+
 type DecisionMakerContact = {
   firstName: string | null;
   lastName: string | null;
@@ -27,20 +29,6 @@ type SerperResult = {
   link?: string;
   snippet?: string;
 };
-
-function slugify(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function parseDomain(value: string | null | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = value.startsWith("http") ? value : `https://${value}`;
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
 
 function titleToDepartment(title: string | null) {
   if (!title) return null;
@@ -128,22 +116,29 @@ async function serperSearch(query: string) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return [];
 
-  const response = await fetch("https://google.serper.dev/search", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-    },
-    body: JSON.stringify({ q: query, num: 10 }),
-    signal: AbortSignal.timeout(8_000),
-  });
+  try {
+    const response = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({ q: query, num: 10 }),
+      signal: AbortSignal.timeout(8_000),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      console.error(`Serper search failed with status ${response.status}`);
+      return [];
+    }
+
+    const payload = (await response.json()) as { organic?: SerperResult[] };
+    return payload.organic ?? [];
+  } catch (error) {
+    // A timeout on one provider must not reject the whole parallel lookup.
+    console.error("Serper search failed:", error instanceof Error ? error.message : error);
     return [];
   }
-
-  const payload = (await response.json()) as { organic?: SerperResult[] };
-  return payload.organic ?? [];
 }
 
 async function resolveWebsite(companyName: string, providedWebsite?: string | null) {
@@ -443,13 +438,25 @@ async function searchContactsFromHunter(domain: string | null) {
   const url = new URL("https://api.hunter.io/v2/domain-search");
   url.searchParams.set("domain", domain);
   url.searchParams.set("limit", "10");
-  url.searchParams.set("api_key", apiKey);
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-  if (!response.ok) return [];
+  let emails: HunterEmail[];
+  try {
+    // API key goes in a header, not the query string, so it can't leak via logs/referrers.
+    const response = await fetch(url, {
+      headers: { "X-API-KEY": apiKey },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) {
+      console.error(`Hunter domain search failed with status ${response.status}`);
+      return [];
+    }
 
-  const payload = (await response.json()) as { data?: { emails?: HunterEmail[] } };
-  const emails = payload.data?.emails ?? [];
+    const payload = (await response.json()) as { data?: { emails?: HunterEmail[] } };
+    emails = payload.data?.emails ?? [];
+  } catch (error) {
+    console.error("Hunter domain search failed:", error instanceof Error ? error.message : error);
+    return [];
+  }
 
   return emails.map((entry) => {
     const fullName = [entry.first_name, entry.last_name].filter(Boolean).join(" ").trim();
@@ -480,7 +487,7 @@ async function searchContactsFromHunter(domain: string | null) {
 const CREDENTIAL_PATTERN =
   /\b(?:ma|mha|mba|ms|bs|ba|rn|bsn|msn|lpn|np|pa|md|do|dvm|phd|edd|jd|cpa|cfa|cfp|coo|ceo|cfo|nha|crcst|lnha|fache|facc|chfp|chc|sphr|phr|shrm|six sigma|pmp|ccm|cmc|cadc|lcsw|lmft|lpc)\b/gi;
 
-function cleanPersonName(raw: string | null | undefined): {
+export function cleanPersonName(raw: string | null | undefined): {
   firstName: string | null;
   lastName: string | null;
   fullName: string | null;
@@ -704,7 +711,9 @@ async function enrichContactFromPDL(input: {
 export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOutput> {
   const providersUsed: string[] = [];
   const resolvedWebsite = await resolveWebsite(input.companyName, input.website);
-  const domain = parseDomain(resolvedWebsite) || `${slugify(input.companyName)}.com`;
+  // Only use a domain we actually resolved — a guessed "<company-slug>.com"
+  // sends Hunter/Apollo lookups to domains that may belong to someone else.
+  const domain = parseDomain(resolvedWebsite);
 
   // Run all three providers in parallel. Apollo is the primary source for
   // email + phone; Hunter fills domain-level emails; Serper adds LinkedIn names.
@@ -765,7 +774,7 @@ export async function lookupDecisionMakers(input: LookupInput): Promise<LookupOu
   const merged = toUniqueContacts([...apolloOnly, ...enrichedHunter, ...serperOnly]).slice(0, 10);
 
   return {
-    resolvedWebsite: resolvedWebsite ?? `https://${domain}`,
+    resolvedWebsite,
     contacts: merged,
     providersUsed,
   };

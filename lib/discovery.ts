@@ -1,3 +1,5 @@
+import { parseDomain, slugify } from "@/lib/text";
+
 type LeadCandidateInput = {
   companyName: string;
   website: string | null;
@@ -18,27 +20,6 @@ type SerperOrganicResult = {
   snippet?: string;
   date?: string;
 };
-
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function parseDomain(value: string | null | undefined): string | null {
-  if (!value) return null;
-  try {
-    const url = value.startsWith("http") ? value : `https://${value}`;
-    const hostname = new URL(url).hostname.replace(/^www\./, "");
-    if (hostname.includes("linkedin") || hostname.includes("facebook") || hostname.includes("twitter")) {
-      return null;
-    }
-    return hostname;
-  } catch {
-    return null;
-  }
-}
 
 function detectSignalType(text: string): string {
   const normalized = text.toLowerCase();
@@ -123,7 +104,7 @@ export async function buildLeadCandidates(
 
       for (const result of results) {
         const link = result.link ?? "";
-        const domain = parseDomain(link);
+        const domain = parseDomain(link, { excludeSocial: true });
         if (!domain) continue;
 
         // Skip generic info sites

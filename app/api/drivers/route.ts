@@ -5,7 +5,7 @@ import { driverCreateSchema } from "@/lib/crm-validation";
 import { NextRequest } from "next/server";
 import { DeliveryStatus } from "@prisma/client";
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const drivers = await db.driver.findMany({
     include: {
       _count: {
