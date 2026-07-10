@@ -269,6 +269,21 @@ export const instantlyImportSchema = z.object({
   limit: z.number().int().positive().max(500).optional(),
 });
 
+export const registrySearchSchema = z.object({
+  counties: z.array(z.string()).optional(),
+  cities: z.array(z.string().min(1)).optional(),
+  state: z.string().length(2).default("FL"),
+  facilityTypes: z.array(z.string().min(1)).min(1),
+});
+
+export const registryImportSchema = registrySearchSchema.extend({
+  // Import everything the search returns, or only these NPIs.
+  npis: z.array(z.string().min(1)).optional(),
+  // Look up emails for authorized officials via Apollo/PDL after import
+  // (bounded — see route). Officials come with name/title/phone for free.
+  enrichEmails: z.boolean().optional(),
+});
+
 const spreadsheetRowSchema = z.object({
   companyName: z.string().min(1),
   website: z.string().optional().nullable(),
