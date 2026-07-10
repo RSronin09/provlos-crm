@@ -61,7 +61,7 @@ export function EnrichContactButton({ contactId, hasEmail, hasPhone }: Props) {
       {status === "idle" && (
         <button
           onClick={handleEnrich}
-          title="Look up email & phone via Apollo"
+          title="Look up email & phone — facility website first (free), then Hunter, with Apollo/PDL as backup"
           className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 border border-blue-200 transition"
         >
           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

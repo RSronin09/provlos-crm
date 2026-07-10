@@ -1,13 +1,15 @@
 import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { lookupDecisionMakers, enrichContactByName } from "@/lib/decision-makers";
+import { lookupDecisionMakers, enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
 import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { parseDomain } from "@/lib/text";
+import { scrapeSiteForContacts } from "@/lib/web-contact-scraper";
 import { NextRequest } from "next/server";
 
-// How many existing contacts (with no email) to attempt Apollo person-match on.
-// Each costs 1 Apollo credit.
+// How many existing contacts (missing email/phone) to enrich per click.
+// The free website scrape covers all of them at no cost; this cap bounds
+// the Hunter/Apollo/PDL fallback calls (time + credits).
 const MAX_CONTACT_MATCHES = 10;
 
 export async function POST(request: NextRequest) {
@@ -49,30 +51,54 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Account not found" }, { status: 404 });
   }
 
-  const domain = parseDomain(account.website);
+  // -----------------------------------------------------------------------
+  // Phase 0: Make sure we have a website — the free enrichment tier
+  // (site scraping) and Hunter both depend on the domain. Registry-imported
+  // facilities usually arrive without one.
+  // -----------------------------------------------------------------------
+  let website = account.website;
+  if (!website && process.env.SERPER_API_KEY) {
+    try {
+      website = await resolveWebsite(account.companyName);
+      if (website) {
+        await db.account.update({ where: { id: account.id }, data: { website } });
+      }
+    } catch {
+      website = null;
+    }
+  }
+  const domain = parseDomain(website);
 
   let added = 0;
   let updated = 0;
   const providersUsed = new Set<string>();
 
   // -----------------------------------------------------------------------
-  // Phase 1: Per-contact Apollo people/match for existing contacts
-  // that are missing email or phone. This is the most targeted approach
-  // and directly resolves "No email | No phone" on known contacts.
+  // Phase 1: Per-contact enrichment for existing contacts missing email or
+  // phone. Free-first: the facility's own website is scraped ONCE here and
+  // reused for every contact; Hunter runs next; Apollo/PDL are backups.
   // -----------------------------------------------------------------------
   const contactsNeedingEnrichment = account.contacts
     .filter((c) => !c.email || !c.phone)
     .slice(0, MAX_CONTACT_MATCHES);
 
+  const scrapedSite =
+    website && contactsNeedingEnrichment.length ? await scrapeSiteForContacts(website) : null;
+  if (scrapedSite) providersUsed.add("website");
+
   for (const contact of contactsNeedingEnrichment) {
-    const match = await enrichContactByName({
-      firstName: contact.firstName,
-      lastName: contact.lastName,
-      fullName: contact.fullName,
-      organizationName: account.companyName,
-      domain,
-      linkedinUrl: contact.linkedinUrl,
-    });
+    const match = await enrichContactByName(
+      {
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        fullName: contact.fullName,
+        organizationName: account.companyName,
+        domain,
+        website,
+        linkedinUrl: contact.linkedinUrl,
+      },
+      { scrapedSite },
+    );
 
     if (!match) continue;
 
@@ -92,12 +118,12 @@ export async function POST(request: NextRequest) {
           firstName: contact.firstName ?? match.firstName ?? undefined,
           lastName: contact.lastName ?? match.lastName ?? undefined,
           confidenceScore: Math.max(contact.confidenceScore ?? 0, match.confidenceScore),
-          source: "apollo_enriched",
+          source: match.source,
           lastVerifiedAt: new Date(),
         },
       });
       updated++;
-      providersUsed.add("apollo");
+      match.sourcesUsed.forEach((s) => providersUsed.add(s));
     }
   }
 
@@ -110,7 +136,7 @@ export async function POST(request: NextRequest) {
     const { contacts: discovered, resolvedWebsite, providersUsed: usedProviders } =
       await lookupDecisionMakers({
         companyName: account.companyName,
-        website: account.website,
+        website,
       });
 
     usedProviders.forEach((p) => providersUsed.add(p));
@@ -120,7 +146,7 @@ export async function POST(request: NextRequest) {
     updated += saved.updated;
 
     // Update account website if resolved
-    if (resolvedWebsite && !account.website) {
+    if (resolvedWebsite && !website) {
       await db.account.update({
         where: { id: account.id },
         data: { website: resolvedWebsite },
@@ -133,6 +159,21 @@ export async function POST(request: NextRequest) {
     console.error(`Company-level discovery failed for ${account.companyName}:`, discoveryError);
   }
 
+  // Be honest when the button had nothing to work with.
+  let note: string | null = null;
+  const anyPaidProvider =
+    !!process.env.HUNTER_API_KEY ||
+    !!process.env.SERPER_API_KEY ||
+    (!!process.env.APOLLO_API_KEY && process.env.APOLLO_PLAN_ENABLED === "true") ||
+    !!process.env.PDL_API_KEY;
+  if (!website && !anyPaidProvider) {
+    note =
+      "No enrichment sources available: this account has no website to scrape and no provider API keys (SERPER, HUNTER, APOLLO, PDL) are configured — see /crm/settings.";
+  } else if (!website && !process.env.SERPER_API_KEY) {
+    note =
+      "This account has no website, so the free website scrape was skipped. Add the website to the account (or set SERPER_API_KEY so it can be found automatically).";
+  }
+
   return Response.json({
     data: {
       accountId: account.id,
@@ -140,8 +181,10 @@ export async function POST(request: NextRequest) {
       contactsAdded: added,
       contactsUpdated: updated,
       totalProcessed: contactsNeedingEnrichment.length,
+      totalContacts: account.contacts.length,
       providersUsed: [...providersUsed],
       discoveryError,
+      note,
     },
     message: `Enrichment complete: ${updated} contacts updated with email/phone, ${added} new contacts found for ${account.companyName}.${discoveryError ? ` Note: company-level discovery failed (${discoveryError}).` : ""}`,
   });

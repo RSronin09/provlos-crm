@@ -7,6 +7,7 @@ type EnrichResult = {
   contactsUpdated: number;
   totalContacts: number;
   providersUsed: string[];
+  note?: string | null;
 };
 
 export function EnrichButton({ accountId }: { accountId: string }) {
@@ -81,8 +82,14 @@ export function EnrichButton({ accountId }: { accountId: string }) {
               {" "}via {result.providersUsed.join(", ")}
             </>
           ) : (
-            `Search complete — no new data found (${result.totalContacts} contacts already up to date).`
+            `Search complete — no new data found (${result.totalContacts} contacts checked).`
           )}
+        </div>
+      )}
+
+      {status === "done" && result?.note && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+          {result.note}
         </div>
       )}
 

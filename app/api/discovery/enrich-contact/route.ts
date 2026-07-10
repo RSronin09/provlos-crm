@@ -36,13 +36,17 @@ export async function POST(request: NextRequest) {
     fullName: contact.fullName,
     organizationName: contact.account.companyName,
     domain,
+    website: contact.account.website,
     linkedinUrl: contact.linkedinUrl,
   });
 
   if (!match) {
+    const reason = contact.account.website
+      ? "No match found via website scrape, Hunter, or the Apollo/PDL backups."
+      : "The account has no website (which the free lookup needs) and no provider found a match.";
     return Response.json({
-      data: { updated: false, reason: "Apollo returned no match for this person." },
-      message: "No match found. Try adding a LinkedIn URL to this contact and retry.",
+      data: { updated: false, reason },
+      message: "No match found. Add the account's website or a LinkedIn URL to this contact and retry.",
     });
   }
 
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest) {
       firstName: contact.firstName ?? match.firstName ?? undefined,
       lastName: contact.lastName ?? match.lastName ?? undefined,
       confidenceScore: Math.max(contact.confidenceScore ?? 0, match.confidenceScore),
-      source: "apollo_enriched",
+      source: match.source,
       lastVerifiedAt: new Date(),
     },
   });
@@ -80,7 +84,8 @@ export async function POST(request: NextRequest) {
       email: updated.email,
       phone: updated.phone,
       linkedinUrl: updated.linkedinUrl,
+      sourcesUsed: match.sourcesUsed,
     },
-    message: `Contact enriched: ${match.email ? "email found" : ""}${match.email && match.phone ? " + " : ""}${match.phone ? "phone found" : ""}.`,
+    message: `Contact enriched via ${match.sourcesUsed.join(" + ") || "enrichment"}: ${match.email ? "email found" : ""}${match.email && match.phone ? " + " : ""}${match.phone ? "phone found" : ""}.`,
   });
 }
