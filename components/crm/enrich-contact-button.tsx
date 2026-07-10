@@ -84,7 +84,12 @@ export function EnrichContactButton({ contactId, hasEmail, hasPhone }: Props) {
         <span className="text-xs text-green-600 font-medium">✓ {resultMsg}</span>
       )}
       {status === "no_match" && (
-        <span className="text-xs text-slate-400" title={resultMsg ?? ""}>No match</span>
+        <span
+          className="inline-block max-w-[280px] truncate align-middle text-xs text-slate-400"
+          title={resultMsg ?? ""}
+        >
+          {resultMsg ?? "No match"}
+        </span>
       )}
       {status === "error" && (
         <span className="text-xs text-red-500">{resultMsg}</span>
