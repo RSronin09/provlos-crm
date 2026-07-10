@@ -5,14 +5,21 @@ import { DecisionMakerSearch } from "@/components/crm/decision-maker-search";
 import { BulkDiscovery } from "@/components/crm/bulk-discovery";
 import { SpreadsheetImport } from "@/components/crm/spreadsheet-import";
 import { InstantlySearchPanel } from "@/components/crm/instantly-search-panel";
+import { RegistrySearchPanel } from "@/components/crm/registry-search-panel";
 
-type Tab = "search" | "bulk" | "spreadsheet" | "instantly";
+type Tab = "registry" | "search" | "bulk" | "spreadsheet" | "instantly";
 
 const TABS: { id: Tab; label: string; description: string }[] = [
   {
+    id: "registry",
+    label: "Healthcare Registry",
+    description:
+      "Pull every licensed healthcare facility in your target counties from the free government NPI registry — with decision-maker names, titles, and phones included.",
+  },
+  {
     id: "search",
     label: "Decision Maker Search",
-    description: "Look up decision makers at any company using Serper and Hunter.io.",
+    description: "Look up decision makers at any company using Apollo, Hunter.io, and Serper.",
   },
   {
     id: "bulk",
@@ -32,7 +39,7 @@ const TABS: { id: Tab; label: string; description: string }[] = [
 ];
 
 export default function DiscoveryPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("search");
+  const [activeTab, setActiveTab] = useState<Tab>("registry");
 
   const active = TABS.find((t) => t.id === activeTab)!;
 
@@ -66,6 +73,7 @@ export default function DiscoveryPage() {
 
       <p className="text-xs text-slate-500 -mt-2">{active.description}</p>
 
+      {activeTab === "registry" && <RegistrySearchPanel />}
       {activeTab === "search" && <DecisionMakerSearch />}
       {activeTab === "bulk" && <BulkDiscovery />}
       {activeTab === "spreadsheet" && <SpreadsheetImport />}
