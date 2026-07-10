@@ -1,3 +1,4 @@
+import { CleanupContactsButton } from "@/components/crm/cleanup-contacts-button";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import Link from "next/link";
 
@@ -150,6 +151,18 @@ export default function SettingsPage() {
           To restrict access: set <code className="font-mono text-xs">ADMIN_TOKEN=your-secret</code> in
           Vercel and enter the same value in the Admin Token field on the discovery and import pages.
         </p>
+      </div>
+
+      {/* Data hygiene */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-800">Data Hygiene</h2>
+        <p className="text-sm text-slate-600">
+          Earlier web-search discovery sometimes saved snippet artifacts like &quot;Director Details&quot; as
+          contacts. This scan finds contacts whose name isn&apos;t a real person <em>and</em> that carry no
+          email, phone, or LinkedIn, and lets you delete them in one click. Contacts with any real data are
+          never touched.
+        </p>
+        <CleanupContactsButton />
       </div>
 
       {/* Quick links */}
