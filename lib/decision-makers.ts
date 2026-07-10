@@ -179,9 +179,12 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
 
   for (const result of linkedinResults.slice(0, 10)) {
     const isLinkedin = isLinkedinProfileUrl(result.link);
-    const fullName = isLinkedin
+    const rawName = isLinkedin
       ? extractNameFromLinkedinTitle(result.title)
       : null;
+    // Validate before saving — search snippets love producing "names" like
+    // "Director Details" or "Our Team" that pollute the CRM.
+    const fullName = cleanPersonName(rawName).fullName;
     if (!fullName) continue;
 
     const { firstName, lastName } = splitName(fullName);
@@ -211,8 +214,8 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
 
     // Look for a name pattern near the title in the snippet
     const nameMatch = result.snippet?.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)\b/);
-    if (!nameMatch?.[1]) continue;
-    const fullName = nameMatch[1];
+    const fullName = cleanPersonName(nameMatch?.[1]).fullName;
+    if (!fullName) continue;
 
     contacts.push({
       ...splitName(fullName),
@@ -513,14 +516,32 @@ export function cleanPersonName(raw: string | null | undefined): {
   const parts = name.split(/\s+/).filter((p) => /^[A-Za-z'-]+$/.test(p));
   if (parts.length < 1 || name.length < 3) return { firstName: null, lastName: null, fullName: null };
 
-  // Reject strings that are clearly job titles, not names
+  // Reject strings that are clearly job titles or page furniture, not names
   const lowerName = name.toLowerCase();
   const titleWords = [
     "operations", "supervisor", "manager", "director", "administrator",
     "coordinator", "specialist", "technician", "nurse", "nursing", "plant",
     "weekend", "regional", "assistant", "associate", "senior", "junior",
+    "executive", "office", "clinical", "medical", "social", "staff",
   ];
   if (titleWords.some((w) => lowerName.startsWith(w))) {
+    return { firstName: null, lastName: null, fullName: null };
+  }
+
+  // Reject strings where NO word could plausibly be a name — catches search
+  // snippet artifacts like "Director Details", "Our Team", "Home Care",
+  // "Contact Us", "Meet The", "Learn More".
+  const junkWords = new Set([
+    "director", "details", "team", "staff", "contact", "contacts", "info",
+    "about", "our", "the", "us", "we", "meet", "learn", "more", "view",
+    "home", "care", "health", "medical", "services", "service", "center",
+    "leadership", "management", "profile", "page", "group", "facility",
+    "senior", "living", "assisted", "nursing", "hospice", "clinic", "best",
+    "quality", "community", "welcome", "read", "click", "here", "email",
+    "phone", "call", "today", "now", "find", "search",
+  ]);
+  const words = lowerName.split(/\s+/);
+  if (words.length >= 2 && words.every((w) => junkWords.has(w))) {
     return { firstName: null, lastName: null, fullName: null };
   }
 
