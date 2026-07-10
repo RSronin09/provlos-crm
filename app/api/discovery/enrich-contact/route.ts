@@ -1,7 +1,7 @@
 import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { enrichContactByName } from "@/lib/decision-makers";
+import { enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
 import { parseDomain } from "@/lib/text";
 import { NextRequest } from "next/server";
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   const contact = await db.contact.findUnique({
     where: { id: contactId },
     include: {
-      account: { select: { companyName: true, website: true } },
+      account: { select: { id: true, companyName: true, website: true } },
     },
   });
 
@@ -28,7 +28,20 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Contact not found" }, { status: 404 });
   }
 
-  const domain = parseDomain(contact.account.website);
+  // Registry-imported facilities arrive without a website, and both the free
+  // scrape and Hunter depend on it — find and save it before enriching.
+  let website = contact.account.website;
+  if (!website && process.env.SERPER_API_KEY) {
+    try {
+      website = await resolveWebsite(contact.account.companyName);
+      if (website) {
+        await db.account.update({ where: { id: contact.account.id }, data: { website } });
+      }
+    } catch {
+      website = null;
+    }
+  }
+  const domain = parseDomain(website);
 
   const match = await enrichContactByName({
     firstName: contact.firstName,
@@ -36,16 +49,29 @@ export async function POST(request: NextRequest) {
     fullName: contact.fullName,
     organizationName: contact.account.companyName,
     domain,
-    website: contact.account.website,
+    website,
     linkedinUrl: contact.linkedinUrl,
   });
 
   if (!match) {
-    const reason = contact.account.website
-      ? "No match found via website scrape, Hunter, or the Apollo/PDL backups."
-      : "The account has no website (which the free lookup needs) and no provider found a match.";
+    // Spell out what actually ran vs. what was skipped, so "No match" is
+    // debuggable from the UI without reading server logs.
+    const tried: string[] = [];
+    const missing: string[] = [];
+    if (website) tried.push("facility website");
+    else missing.push(process.env.SERPER_API_KEY ? "no website found for this account" : "account website (set it, or add SERPER_API_KEY to find it automatically)");
+    if (website && process.env.HUNTER_API_KEY) tried.push("Hunter");
+    else if (!process.env.HUNTER_API_KEY) missing.push("HUNTER_API_KEY");
+    if (process.env.SERPER_API_KEY) tried.push("LinkedIn search");
+    else missing.push("SERPER_API_KEY");
+    if (process.env.APOLLO_API_KEY && process.env.APOLLO_PLAN_ENABLED === "true") tried.push("Apollo");
+    else missing.push(process.env.APOLLO_API_KEY ? "APOLLO_PLAN_ENABLED" : "APOLLO_API_KEY");
+    if (process.env.PDL_API_KEY) tried.push("PDL");
+    else missing.push("PDL_API_KEY");
+
+    const reason = `${tried.length ? `Tried: ${tried.join(", ")} — no public email found.` : "Nothing to search with."}${missing.length ? ` Unavailable: ${missing.join(", ")}.` : ""}`;
     return Response.json({
-      data: { updated: false, reason },
+      data: { updated: false, reason, tried, missing },
       message: "No match found. Add the account's website or a LinkedIn URL to this contact and retry.",
     });
   }
