@@ -4,11 +4,14 @@
 // includes an "authorized official" (name + title + phone) for every
 // facility — i.e. a decision-maker contact straight from the source.
 //
-// This is the primary lead source for the healthcare-courier ICP: instead of
-// scraping search results or paying per-contact for third-party B2B data
-// (which is thin for small facilities), we enumerate the actual licensed
-// facility universe in the target geography, then spend paid enrichment
-// credits only on finding email addresses.
+// This is the primary lead source for the NEMT (non-emergency medical
+// transportation) ICP: the facilities whose patients and residents need
+// recurring rides — dialysis clinics, nursing homes, assisted living,
+// hospitals (discharges), rehab, adult day care. Instead of scraping search
+// results or paying per-contact for third-party B2B data (which is thin for
+// small facilities), we enumerate the actual licensed facility universe in
+// the target geography, then spend paid enrichment credits only on finding
+// email addresses.
 //
 // Docs: https://npiregistry.cms.hhs.gov/api-page
 // ---------------------------------------------------------------------------
@@ -17,13 +20,19 @@ import { FLORIDA_COUNTY_CITIES } from "@/lib/instantly-constants";
 
 const NPI_API_BASE = "https://npiregistry.cms.hhs.gov/api/";
 
-/** How facility types map to NPI taxonomy searches, plus courier-sales
- *  context that gets written onto imported accounts. */
+/** How facility types map to NPI taxonomy searches, plus NEMT-sales context
+ *  that gets written onto imported accounts.
+ *
+ *  Note: `whatTheyMove` / `whyHireCouriers` are the Account schema column
+ *  names (displayed in the UI as "Who They Transport" / "Why They Need
+ *  NEMT" — see lib/account-types.ts). */
 export type FacilityTypePreset = {
   key: string;
   label: string;
   /** Passed to the API's taxonomy_description param (partial match). */
   taxonomyQuery: string;
+  /** Drop results whose primary taxonomy matches (partial-match noise). */
+  excludeTaxonomyPattern?: RegExp;
   whatTheyMove: string;
   whyHireCouriers: string;
   /** Selected by default in the UI. */
@@ -32,75 +41,88 @@ export type FacilityTypePreset = {
 
 export const FACILITY_TYPE_PRESETS: FacilityTypePreset[] = [
   {
+    key: "dialysis",
+    label: "Dialysis Center (ESRD)",
+    taxonomyQuery: "End-Stage Renal Disease",
+    whatTheyMove: "Patients to and from dialysis treatment, typically 3x per week on fixed schedules",
+    whyHireCouriers:
+      "Highest-volume recurring NEMT demand — patients can't drive post-treatment and clinics coordinate standing ride schedules",
+    defaultSelected: true,
+  },
+  {
     key: "snf",
     label: "Skilled Nursing Facility",
     taxonomyQuery: "Skilled Nursing Facility",
-    whatTheyMove: "Pharmacy medications, STAT lab specimens, medical records, wound-care and nursing supplies",
-    whyHireCouriers: "Daily pharmacy runs and same-day STAT specimen pickups; no in-house transport staff",
+    whatTheyMove: "Residents to specialist appointments, dialysis, imaging, and hospital discharges back to the facility",
+    whyHireCouriers:
+      "Wheelchair and stretcher transport for residents; facilities rarely run their own accessible vehicles",
     defaultSelected: true,
   },
   {
     key: "alf",
     label: "Assisted Living Facility",
     taxonomyQuery: "Assisted Living Facility",
-    whatTheyMove: "Resident medications, incontinence and care supplies, documents",
-    whyHireCouriers: "Recurring pharmacy deliveries for residents; small staff with no drivers",
+    whatTheyMove: "Residents to medical appointments, therapy, and dialysis",
+    whyHireCouriers:
+      "Residents no longer drive; families expect the facility to arrange safe door-through-door transport",
     defaultSelected: true,
   },
   {
-    key: "home_health",
-    label: "Home Health Agency",
-    taxonomyQuery: "Home Health",
-    whatTheyMove: "Medical supplies and equipment to patient homes, specimen pickups from the field",
-    whyHireCouriers: "Distributed patient base needs scheduled and on-demand home deliveries",
+    key: "hospital",
+    label: "Hospital",
+    taxonomyQuery: "General Acute Care Hospital",
+    whatTheyMove: "Discharged patients home or to post-acute facilities; inter-facility transfers",
+    whyHireCouriers:
+      "Case managers and discharge planners need same-day wheelchair/stretcher transport to free up beds",
     defaultSelected: true,
   },
   {
-    key: "hospice",
-    label: "Hospice",
-    taxonomyQuery: "Hospice",
-    whatTheyMove: "Comfort kits, medications, and supplies to patient homes and inpatient units",
-    whyHireCouriers: "Time-critical medication deliveries to patients across the service area",
-    defaultSelected: true,
-  },
-  {
-    key: "dialysis",
-    label: "Dialysis Center (ESRD)",
-    taxonomyQuery: "End-Stage Renal Disease",
-    whatTheyMove: "Lab specimens on fixed schedules, dialysate and clinic supplies",
-    whyHireCouriers: "Recurring specimen routes to reference labs multiple times per week",
+    key: "rehab",
+    label: "Rehabilitation (Inpatient & Outpatient)",
+    taxonomyQuery: "Rehabilitation",
+    excludeTaxonomyPattern: /chiropractor|rehabilitation practitioner|substance/i,
+    whatTheyMove: "Patients to recurring outpatient therapy sessions and discharges after inpatient stays",
+    whyHireCouriers: "Multi-week therapy schedules create standing round-trip ride needs",
     defaultSelected: true,
   },
   {
     key: "adult_day",
     label: "Adult Day Care",
     taxonomyQuery: "Adult Day Care",
-    whatTheyMove: "Participant medications, activity and care supplies",
-    whyHireCouriers: "Small operations without vehicles for supply and pharmacy runs",
+    whatTheyMove: "Participants between home and the center every program day",
+    whyHireCouriers: "Daily round-trip transport is core to their operating model; many outsource it",
     defaultSelected: true,
   },
   {
-    key: "pharmacy",
-    label: "Pharmacy",
-    taxonomyQuery: "Pharmacy",
-    whatTheyMove: "Prescription deliveries to facilities and patient homes",
-    whyHireCouriers: "Outsource last-mile prescription delivery instead of running their own drivers",
+    key: "oncology",
+    label: "Oncology Clinic",
+    taxonomyQuery: "Oncology",
+    whatTheyMove: "Patients to daily radiation and recurring chemotherapy/infusion appointments",
+    whyHireCouriers: "Radiation runs 5 days/week for weeks at a time; patients are often too ill to drive",
     defaultSelected: false,
   },
   {
-    key: "lab",
-    label: "Clinical Laboratory",
-    taxonomyQuery: "Clinical Medical Laboratory",
-    whatTheyMove: "Specimen pickups from facilities and draw sites, report/records delivery",
-    whyHireCouriers: "Daily specimen logistics routes between clients and the lab",
+    key: "pt",
+    label: "Physical Therapy Clinic",
+    taxonomyQuery: "Physical Therapy",
+    whatTheyMove: "Patients (often elderly or post-surgery) to recurring therapy visits",
+    whyHireCouriers: "Missed rides mean missed billable visits — clinics have direct incentive to arrange transport",
     defaultSelected: false,
   },
   {
-    key: "dme",
-    label: "Durable Medical Equipment",
-    taxonomyQuery: "Durable Medical Equipment",
-    whatTheyMove: "Medical equipment and supplies delivered/set up at patient homes",
-    whyHireCouriers: "Home delivery capacity without maintaining a delivery fleet",
+    key: "home_health",
+    label: "Home Health Agency",
+    taxonomyQuery: "Home Health",
+    whatTheyMove: "Home-bound patients to physician follow-ups, wound care, and imaging appointments",
+    whyHireCouriers: "Care teams coordinate appointments for patients who have no transportation of their own",
+    defaultSelected: false,
+  },
+  {
+    key: "hospice",
+    label: "Hospice",
+    taxonomyQuery: "Hospice",
+    whatTheyMove: "Patients between home, inpatient hospice units, and facilities",
+    whyHireCouriers: "Stretcher and wheelchair moves that don't require an ambulance",
     defaultSelected: false,
   },
 ];
@@ -202,6 +224,8 @@ function mapResult(result: NpiApiResult, preset: FacilityTypePreset): NpiFacilit
   const primaryTaxonomy =
     result.taxonomies?.find((t) => t.primary)?.desc ?? result.taxonomies?.[0]?.desc;
 
+  if (primaryTaxonomy && preset.excludeTaxonomyPattern?.test(primaryTaxonomy)) return null;
+
   return {
     npi: result.number,
     organizationName: titleCase(dba ?? basic.organization_name) ?? basic.organization_name,
@@ -247,8 +271,9 @@ async function npiQuery(params: URLSearchParams): Promise<NpiApiResult[]> {
 
 // Serverless functions have tight time budgets; cap the number of
 // city × facility-type queries per request and run a few in parallel.
-const MAX_QUERIES_PER_SEARCH = 60;
-const CONCURRENCY = 6;
+// 10 facility types × up to 12 target cities fits inside the cap.
+const MAX_QUERIES_PER_SEARCH = 120;
+const CONCURRENCY = 8;
 
 export async function searchNpiFacilities(input: {
   cities: string[];
