@@ -58,12 +58,13 @@ export const ACCOUNT_TYPE_CONFIG: Record<AccountType, AccountTypeConfig> = {
   CUSTOMER: {
     label: "Customer",
     pluralLabel: "Customers",
-    description: "Companies that hire you for courier and delivery services.",
+    description: "Facilities and organizations that hire you for non-emergency medical transportation.",
     color: "blue",
     badgeClass: "bg-blue-100 text-blue-700 border-blue-200",
     detailFields: [
-      { key: "whatTheyMove", label: "What They Move", type: "text" },
-      { key: "whyHireCouriers", label: "Why Hire Couriers", type: "text" },
+      // Schema columns predate the NEMT focus; labels reflect current use.
+      { key: "whatTheyMove", label: "Who They Transport", type: "text" },
+      { key: "whyHireCouriers", label: "Why They Need NEMT", type: "text" },
     ],
     stageLabels: {
       TARGET: "Target",

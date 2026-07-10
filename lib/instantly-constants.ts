@@ -79,20 +79,24 @@ export const FLORIDA_COUNTY_CITIES: Record<string, string[]> = {
   "Sarasota County, FL": ["Sarasota", "Venice", "North Port", "Englewood", "Osprey", "Nokomis"],
 };
 
-/** Job titles worth targeting at healthcare/senior-living facilities —
- *  mirrors the healthcare title list already used for Apollo in
+/** Job titles worth targeting at healthcare facilities for NEMT sales —
+ *  facility leadership plus the social services / case management staff who
+ *  actually book patient transport. Mirrors the title targeting in
  *  lib/decision-makers.ts, kept separate here since Instantly's `title`
  *  filter takes free-text values rather than Apollo's exact enum. */
 export const HEALTHCARE_FACILITY_TITLES = [
   "Administrator",
+  "Facility Administrator",
   "Executive Director",
   "Director of Nursing",
-  "Director of Operations",
-  "Facility Administrator",
+  "Director of Social Services",
+  "Social Worker",
+  "Case Manager",
+  "Discharge Planner",
+  "Transportation Coordinator",
   "Director of Admissions",
-  "Director of Materials Management",
-  "Purchasing Director",
-  "Director of Support Services",
+  "Activities Director",
+  "Office Manager",
 ];
 
 /** Suggested keyword phrases for the optional keyword filter. Instantly's

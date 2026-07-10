@@ -9,15 +9,16 @@ const COUNTY_OPTIONS = Object.keys(FLORIDA_COUNTY_CITIES);
 // Mirrors FACILITY_TYPE_PRESETS in lib/npi.ts (kept as a plain list here so
 // this client component doesn't import server code).
 const FACILITY_TYPES: { key: string; label: string; defaultSelected: boolean }[] = [
+  { key: "dialysis", label: "Dialysis (ESRD)", defaultSelected: true },
   { key: "snf", label: "Skilled Nursing", defaultSelected: true },
   { key: "alf", label: "Assisted Living", defaultSelected: true },
-  { key: "home_health", label: "Home Health", defaultSelected: true },
-  { key: "hospice", label: "Hospice", defaultSelected: true },
-  { key: "dialysis", label: "Dialysis (ESRD)", defaultSelected: true },
+  { key: "hospital", label: "Hospital", defaultSelected: true },
+  { key: "rehab", label: "Rehabilitation", defaultSelected: true },
   { key: "adult_day", label: "Adult Day Care", defaultSelected: true },
-  { key: "pharmacy", label: "Pharmacy", defaultSelected: false },
-  { key: "lab", label: "Clinical Lab", defaultSelected: false },
-  { key: "dme", label: "Medical Equipment (DME)", defaultSelected: false },
+  { key: "oncology", label: "Oncology Clinic", defaultSelected: false },
+  { key: "pt", label: "Physical Therapy", defaultSelected: false },
+  { key: "home_health", label: "Home Health", defaultSelected: false },
+  { key: "hospice", label: "Hospice", defaultSelected: false },
 ];
 
 type Facility = {
@@ -151,9 +152,11 @@ export function RegistrySearchPanel() {
         <div>
           <h3 className="font-semibold text-slate-800">Healthcare Facility Registry</h3>
           <p className="text-sm text-slate-500 mt-0.5">
-            Pulls every licensed healthcare facility in your target area straight from the U.S. government&apos;s
-            NPI registry — free, no API key, no credits. Each facility comes with its authorized official
-            (decision-maker name, title, and phone). Optionally look up their email via your enrichment providers.
+            Pulls every licensed healthcare facility whose patients need non-emergency medical transport —
+            dialysis centers, nursing homes, assisted living, hospitals, rehab — straight from the U.S.
+            government&apos;s NPI registry. Free, no API key, no credits. Each facility comes with its authorized
+            official (decision-maker name, title, and phone). Optionally look up their email via your enrichment
+            providers.
           </p>
         </div>
 

@@ -92,11 +92,13 @@ export async function buildLeadCandidates(
   const seen = new Set<string>();
 
   if (process.env.SERPER_API_KEY) {
-    // Build a targeted search query combining the signal query with optional geo
+    // Build a targeted search query combining the signal query with optional geo.
+    // Bias toward the NEMT customer base: healthcare facilities whose patients
+    // need recurring transport.
     const geoSuffix = [state, region].filter(Boolean).join(" ");
     const searches = [
-      `${query}${geoSuffix ? " " + geoSuffix : ""} company courier delivery logistics`,
-      `${query}${geoSuffix ? " " + geoSuffix : ""} distribution operations`,
+      `${query}${geoSuffix ? " " + geoSuffix : ""} healthcare facility clinic`,
+      `${query}${geoSuffix ? " " + geoSuffix : ""} senior living rehabilitation dialysis`,
     ];
 
     for (const searchQuery of searches) {

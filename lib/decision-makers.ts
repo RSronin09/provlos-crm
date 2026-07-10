@@ -33,14 +33,15 @@ type SerperResult = {
 function titleToDepartment(title: string | null) {
   if (!title) return null;
   const normalized = title.toLowerCase();
-  if (normalized.includes("logistics")) return "Logistics";
-  if (normalized.includes("supply chain")) return "Supply Chain";
-  if (normalized.includes("operations")) return "Operations";
-  if (normalized.includes("procurement")) return "Procurement";
+  if (normalized.includes("social")) return "Social Services";
+  if (normalized.includes("case manage") || normalized.includes("discharge")) return "Case Management";
   if (normalized.includes("transport")) return "Transportation";
-  if (normalized.includes("distribution")) return "Distribution";
-  if (normalized.includes("fleet")) return "Fleet";
-  if (normalized.includes("warehouse")) return "Warehouse";
+  if (normalized.includes("admissions")) return "Admissions";
+  if (normalized.includes("nursing") || normalized.includes("clinical")) return "Nursing";
+  if (normalized.includes("activities")) return "Activities";
+  if (normalized.includes("operations")) return "Operations";
+  if (normalized.includes("administrat") || normalized.includes("executive director")) return "Administration";
+  if (normalized.includes("office") || normalized.includes("practice") || normalized.includes("clinic manager")) return "Office Management";
   return null;
 }
 
@@ -85,8 +86,8 @@ function extractTitleFromLinkedinTitle(title: string | undefined): string | null
 function extractTitleFromSnippet(snippet: string | undefined): string | null {
   if (!snippet) return null;
   const patterns = [
-    /\b((?:chief|vp|vice president|director|head|manager|coordinator|officer|supervisor|lead|analyst|specialist)\s+(?:of\s+)?[^,.;|]{3,60})/i,
-    /\b((?:logistics|supply chain|operations|procurement|transport|distribution|fleet|warehouse)\s+(?:director|manager|head|coordinator|vp|vice president|officer|supervisor|lead)[^,.;|]{0,40})/i,
+    /\b((?:chief|vp|vice president|director|head|manager|coordinator|officer|supervisor|lead|administrator|planner)\s+(?:of\s+)?[^,.;|]{3,60})/i,
+    /\b((?:social services|case management|admissions|nursing|activities|transportation|operations)\s+(?:director|manager|head|coordinator|vp|vice president|officer|supervisor|lead|planner)[^,.;|]{0,40})/i,
   ];
   for (const pattern of patterns) {
     const match = snippet.match(pattern);
@@ -157,11 +158,11 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
 
   // Primary: LinkedIn profile search
   const linkedinQuery = domain
-    ? `site:linkedin.com/in "${companyName}" (operations OR logistics OR "supply chain" OR procurement OR distribution OR "materials management" OR purchasing OR facilities OR administrative)`
-    : `"${companyName}" ("operations manager" OR "director of operations" OR "supply chain" OR "logistics manager" OR "materials management" OR "purchasing director" OR "executive director" OR administrator) site:linkedin.com/in`;
+    ? `site:linkedin.com/in "${companyName}" (administrator OR "executive director" OR "social services" OR "case manager" OR "discharge planner" OR "director of nursing" OR admissions OR "transportation coordinator" OR operations)`
+    : `"${companyName}" (administrator OR "executive director" OR "social services" OR "case manager" OR "director of nursing" OR "admissions director" OR "office manager") site:linkedin.com/in`;
 
   // Secondary: general title search
-  const generalQuery = `"${companyName}" (director OR manager OR administrator OR "executive director") (operations OR logistics OR "supply chain" OR "materials management" OR purchasing OR procurement)`;
+  const generalQuery = `"${companyName}" (administrator OR "executive director" OR director OR manager) ("social services" OR "case management" OR admissions OR nursing OR operations OR transportation)`;
 
   const [linkedinResults, generalResults] = await Promise.all([
     serperSearch(linkedinQuery),
@@ -227,45 +228,41 @@ async function searchDecisionMakersFromSerper(companyName: string, domain: strin
 // Apollo.io — two-step: search (free) then enrich (1 credit each)
 // ---------------------------------------------------------------------------
 
-// Titles we target for decision-maker discovery
+// Titles we target for decision-maker discovery. The ICP is NEMT
+// (non-emergency medical transportation): the people who decide which
+// transport company a facility calls are administrators, social services /
+// case management staff (who book the rides), and operations leadership.
 const APOLLO_TARGET_TITLES = [
-  // General operations
-  "VP Operations",
-  "Vice President Operations",
-  "Director of Operations",
+  // Facility leadership — signs vendor agreements
+  "Administrator",
+  "Facility Administrator",
+  "Executive Director",
   "Chief Operating Officer",
   "COO",
+  "Director of Operations",
   "Operations Manager",
-  "Head of Operations",
-  // Logistics & supply chain
-  "Director of Logistics",
-  "Director of Supply Chain",
-  "Head of Logistics",
-  "Logistics Manager",
-  "Supply Chain Manager",
-  "Fleet Manager",
-  "Transportation Manager",
-  "Distribution Manager",
-  // Procurement & purchasing
-  "Procurement Manager",
-  "Purchasing Manager",
-  "Purchasing Director",
-  "Director of Purchasing",
-  // Healthcare-specific operations titles
-  "Materials Management Director",
-  "Director of Materials Management",
-  "Materials Manager",
-  "Supply Chain Director",
-  "Director of Supply Chain",
-  "Facilities Manager",
-  "Director of Facilities",
-  "Administrative Director",
-  "Director of Administrative Services",
   "Chief Administrative Officer",
-  "Administrator",
-  "Executive Director",
-  "Director of Support Services",
-  "Environmental Services Director",
+  "Administrative Director",
+  // The people who actually book patient transport
+  "Director of Social Services",
+  "Social Services Director",
+  "Social Worker",
+  "Case Manager",
+  "Director of Case Management",
+  "Discharge Planner",
+  "Transportation Coordinator",
+  "Transportation Manager",
+  "Activities Director",
+  // Clinical & admissions leadership involved in transport decisions
+  "Director of Nursing",
+  "Director of Admissions",
+  "Admissions Director",
+  "Admissions Coordinator",
+  // Clinic-scale decision makers
+  "Office Manager",
+  "Clinic Manager",
+  "Practice Manager",
+  "Clinic Administrator",
 ];
 
 type ApolloSearchPerson = {
