@@ -1,4 +1,10 @@
 import { parseDomain } from "@/lib/text";
+import {
+  findPersonContact,
+  inferEmailFromSitePattern,
+  scrapeSiteForContacts,
+  type ScrapedSite,
+} from "@/lib/web-contact-scraper";
 
 type DecisionMakerContact = {
   firstName: string | null;
@@ -142,7 +148,7 @@ async function serperSearch(query: string) {
   }
 }
 
-async function resolveWebsite(companyName: string, providedWebsite?: string | null) {
+export async function resolveWebsite(companyName: string, providedWebsite?: string | null) {
   if (providedWebsite) return providedWebsite;
 
   const results = await serperSearch(`${companyName} official website`);
@@ -533,93 +539,280 @@ export type ApolloContactMatch = {
   lastName: string | null;
   fullName: string | null;
   confidenceScore: number;
+  /** Where the primary data (email if present) came from. */
+  source: string;
+  /** Every source that contributed data. */
+  sourcesUsed: string[];
 };
 
-export async function enrichContactByName(input: {
+// ---------------------------------------------------------------------------
+// Hunter Email Finder — non-Apollo/PDL email lookup by name + domain.
+// Uses Hunter credits, but this is the "keep Apollo/PDL as backup" tier.
+// ---------------------------------------------------------------------------
+
+async function hunterEmailFinder(
+  firstName: string,
+  lastName: string,
+  domain: string,
+): Promise<{ email: string; score: number; position: string | null; phone: string | null } | null> {
+  const apiKey = process.env.HUNTER_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const url = new URL("https://api.hunter.io/v2/email-finder");
+    url.searchParams.set("domain", domain);
+    url.searchParams.set("first_name", firstName);
+    url.searchParams.set("last_name", lastName);
+
+    const response = await fetch(url, {
+      headers: { "X-API-KEY": apiKey },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      data?: { email?: string | null; score?: number | null; position?: string | null; phone_number?: string | null };
+    };
+    const data = payload.data;
+    if (!data?.email || (data.score ?? 0) < 60) return null;
+
+    return {
+      email: data.email,
+      score: data.score ?? 60,
+      position: data.position ?? null,
+      phone: data.phone_number ?? null,
+    };
+  } catch (error) {
+    console.error("Hunter email finder failed:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/** Finds a person's LinkedIn profile via Serper — free-tier step that also
+ *  makes the Apollo/PDL backup lookups far more precise. */
+async function findLinkedinForPerson(
+  fullName: string,
+  organizationName: string,
+): Promise<string | null> {
+  if (!process.env.SERPER_API_KEY) return null;
+
+  const results = await serperSearch(`site:linkedin.com/in "${fullName}" "${organizationName}"`);
+  const lastName = fullName.split(/\s+/).pop()?.toLowerCase() ?? "";
+
+  const hit = results.find((result) => {
+    if (!isLinkedinProfileUrl(result.link)) return false;
+    const extracted = extractNameFromLinkedinTitle(result.title)?.toLowerCase() ?? "";
+    return lastName.length >= 3 && extracted.includes(lastName);
+  });
+  return hit?.link ?? null;
+}
+
+async function enrichContactFromApollo(input: {
   firstName: string | null;
   lastName: string | null;
-  fullName?: string | null;
+  fullName: string | null;
   organizationName: string;
   domain?: string | null;
   linkedinUrl?: string | null;
 }): Promise<ApolloContactMatch | null> {
-  // Clean the name before sending to any API — strips credentials,
-  // company name artifacts, and non-person strings
+  const apolloKey = process.env.APOLLO_API_KEY;
+  const apolloPlanEnabled = process.env.APOLLO_PLAN_ENABLED === "true";
+  if (!apolloKey || !apolloPlanEnabled) return null;
+
+  const body: Record<string, unknown> = {
+    organization_name: input.organizationName,
+    reveal_personal_emails: false,
+    reveal_phone_number: true,
+  };
+  if (input.linkedinUrl) {
+    body.linkedin_url = input.linkedinUrl;
+  } else {
+    body.first_name = input.firstName;
+    body.last_name = input.lastName;
+  }
+  if (input.domain) body.domain = input.domain;
+
+  try {
+    const response = await fetch("https://api.apollo.io/api/v1/people/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apolloKey,
+        "Cache-Control": "no-cache",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { person?: ApolloEnrichedPerson };
+    const person = payload.person;
+    if (!person || (!person.email && !person.phone_numbers?.length)) return null;
+
+    const primaryPhone =
+      person.phone_numbers?.find((p) => p.type === "work_direct")?.raw_number ??
+      person.phone_numbers?.[0]?.raw_number ??
+      null;
+
+    return {
+      email: person.email ?? null,
+      phone: primaryPhone,
+      linkedinUrl: person.linkedin_url ?? null,
+      title: person.title ?? null,
+      firstName: person.first_name ?? input.firstName,
+      lastName: person.last_name ?? input.lastName,
+      fullName: person.name ?? input.fullName,
+      confidenceScore: person.email ? 0.95 : 0.7,
+      source: "apollo",
+      sourcesUsed: ["apollo"],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Free-first enrichment cascade for a single known contact:
+ *
+ *   1. The facility's own website (free) — staff/contact pages often list
+ *      the exact person's email and direct phone.
+ *   2. Hunter email finder (non-Apollo/PDL, uses Hunter credits).
+ *   3. LinkedIn profile lookup via Serper (free tier of value on its own,
+ *      and it sharpens the paid lookups below).
+ *   4. Apollo people/match — BACKUP (requires APOLLO_PLAN_ENABLED).
+ *   5. People Data Labs — BACKUP.
+ *   6. Site email-pattern guess (first.last@) — last resort, clearly
+ *      low-confidence and MX-verified.
+ */
+export async function enrichContactByName(
+  input: {
+    firstName: string | null;
+    lastName: string | null;
+    fullName?: string | null;
+    organizationName: string;
+    domain?: string | null;
+    website?: string | null;
+    linkedinUrl?: string | null;
+  },
+  options: { scrapedSite?: ScrapedSite | null } = {},
+): Promise<ApolloContactMatch | null> {
+  // Clean the name before sending anywhere — strips credentials,
+  // company-name artifacts, and non-person strings
   const cleaned = cleanPersonName(input.fullName ?? [input.firstName, input.lastName].filter(Boolean).join(" "));
 
-  // If the name doesn't look like a real person, skip both APIs
   const firstName = cleaned.firstName ?? input.firstName;
   const lastName = cleaned.lastName ?? input.lastName;
   if (!firstName && !input.linkedinUrl) return null;
 
-  // ---- Try Apollo first (requires paid plan for people/match) ----
-  const apolloKey = process.env.APOLLO_API_KEY;
-  const apolloPlanEnabled = process.env.APOLLO_PLAN_ENABLED === "true";
+  const sourcesUsed: string[] = [];
+  let email: string | null = null;
+  let emailSource = "";
+  let phone: string | null = null;
+  let title: string | null = null;
+  let linkedinUrl = input.linkedinUrl ?? null;
+  let confidence = 0;
 
-  if (apolloKey && apolloPlanEnabled) {
-    const body: Record<string, unknown> = {
-      organization_name: input.organizationName,
-      reveal_personal_emails: false,
-      reveal_phone_number: true,
-    };
+  // ---- 1. Facility website (free) ----
+  // A scrape can be passed in (enrich-account scrapes once per account and
+  // reuses it for every contact); `undefined` means scrape here.
+  let site = options.scrapedSite;
+  const websiteForScrape = input.website ?? (input.domain ? `https://${input.domain}` : null);
+  if (site === undefined) {
+    site = websiteForScrape ? await scrapeSiteForContacts(websiteForScrape) : null;
+  }
 
-    if (input.linkedinUrl) {
-      body.linkedin_url = input.linkedinUrl;
-    } else {
-      body.first_name = firstName;
-      body.last_name = lastName;
+  if (site && firstName && lastName) {
+    const hit = findPersonContact(site, firstName, lastName);
+    if (hit.email) {
+      email = hit.email;
+      emailSource = "website";
+      confidence = 0.82;
+      sourcesUsed.push("website");
     }
-    if (input.domain) body.domain = input.domain;
-
-    try {
-      const response = await fetch("https://api.apollo.io/api/v1/people/match", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Api-Key": apolloKey,
-          "Cache-Control": "no-cache",
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(10_000),
-      });
-
-      if (response.ok) {
-        const payload = (await response.json()) as { person?: ApolloEnrichedPerson };
-        const person = payload.person;
-
-        if (person && (person.email || person.phone_numbers?.length)) {
-          const primaryPhone =
-            person.phone_numbers?.find((p) => p.type === "work_direct")?.raw_number ??
-            person.phone_numbers?.[0]?.raw_number ??
-            null;
-
-          return {
-            email: person.email ?? null,
-            phone: primaryPhone,
-            linkedinUrl: person.linkedin_url ?? null,
-            title: person.title ?? null,
-            firstName: person.first_name ?? firstName,
-            lastName: person.last_name ?? lastName,
-            fullName: person.name ?? cleaned.fullName,
-            confidenceScore: person.email ? 0.95 : 0.70,
-          };
-        }
-      }
-    } catch {
-      // Apollo failed — fall through to PDL
+    if (hit.phone) {
+      phone = hit.phone;
+      if (!sourcesUsed.includes("website")) sourcesUsed.push("website");
     }
   }
 
-  // ---- Fallback: People Data Labs ----
-  const pdlResult = await enrichContactFromPDL({
+  // ---- 2. Hunter email finder (non-Apollo/PDL) ----
+  const domain = input.domain ?? site?.domain ?? null;
+  if (!email && firstName && lastName && domain) {
+    const hunterHit = await hunterEmailFinder(firstName, lastName, domain);
+    if (hunterHit) {
+      email = hunterHit.email;
+      emailSource = "hunter";
+      confidence = Math.min(hunterHit.score / 100, 0.95);
+      title = title ?? hunterHit.position;
+      phone = phone ?? hunterHit.phone;
+      sourcesUsed.push("hunter");
+    }
+  }
+
+  // ---- 3. LinkedIn profile via Serper (free-tier value + sharpens backups) ----
+  const fullNameForSearch = cleaned.fullName ?? [firstName, lastName].filter(Boolean).join(" ");
+  if (!linkedinUrl && fullNameForSearch) {
+    linkedinUrl = await findLinkedinForPerson(fullNameForSearch, input.organizationName);
+    if (linkedinUrl) sourcesUsed.push("serper");
+  }
+
+  // ---- 4/5. Paid backups — only when the free tier didn't find an email ----
+  if (!email) {
+    const backup =
+      (await enrichContactFromApollo({
+        firstName,
+        lastName,
+        fullName: cleaned.fullName,
+        organizationName: input.organizationName,
+        domain,
+        linkedinUrl,
+      })) ??
+      (await enrichContactFromPDL({
+        firstName,
+        lastName,
+        organizationName: input.organizationName,
+        domain,
+        linkedinUrl,
+      }));
+
+    if (backup) {
+      email = backup.email;
+      emailSource = backup.email ? backup.source : emailSource;
+      phone = phone ?? backup.phone;
+      title = title ?? backup.title;
+      linkedinUrl = linkedinUrl ?? backup.linkedinUrl;
+      confidence = Math.max(confidence, backup.confidenceScore);
+      sourcesUsed.push(backup.source);
+    }
+  }
+
+  // ---- 6. Last resort: pattern guess from the site's own email format ----
+  if (!email && site) {
+    const guessed = await inferEmailFromSitePattern(site, firstName, lastName);
+    if (guessed) {
+      email = guessed;
+      emailSource = "email_pattern_guess";
+      confidence = Math.max(confidence, 0.45);
+      sourcesUsed.push("email_pattern_guess");
+    }
+  }
+
+  if (!email && !phone && !linkedinUrl) return null;
+  // A pre-existing LinkedIn URL alone isn't new data.
+  if (!email && !phone && linkedinUrl === (input.linkedinUrl ?? null)) return null;
+
+  return {
+    email,
+    phone,
+    linkedinUrl,
+    title,
     firstName,
     lastName,
-    organizationName: input.organizationName,
-    domain: input.domain,
-    linkedinUrl: input.linkedinUrl,
-  });
-
-  return pdlResult;
+    fullName: cleaned.fullName ?? fullNameForSearch ?? null,
+    confidenceScore: confidence || (email ? 0.6 : 0.55),
+    source: emailSource || sourcesUsed[0] || "enrichment",
+    sourcesUsed,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -698,6 +891,8 @@ async function enrichContactFromPDL(input: {
       lastName: data.last_name ?? null,
       fullName: data.full_name ?? null,
       confidenceScore: primaryEmail ? 0.88 : 0.65,
+      source: "pdl",
+      sourcesUsed: ["pdl"],
     };
   } catch {
     return null;
