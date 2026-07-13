@@ -7,6 +7,8 @@ import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
+export const maxDuration = 60;
+
 // Cap live enrichment to avoid Vercel function timeouts (each lookup ~5-10 s)
 const MAX_ENRICH = 20;
 

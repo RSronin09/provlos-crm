@@ -7,6 +7,8 @@ import { getFacilityPreset, resolveCities, searchNpiFacilities, type NpiFacility
 import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { NextRequest } from "next/server";
 
+export const maxDuration = 60;
+
 // Cap paid email-enrichment lookups per import to stay inside serverless
 // time budgets (each Apollo/PDL match takes ~2-10s and may cost credits).
 const MAX_EMAIL_ENRICH = 15;

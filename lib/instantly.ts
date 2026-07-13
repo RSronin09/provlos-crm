@@ -263,6 +263,49 @@ export async function listLeadsInList(
 }
 
 // ---------------------------------------------------------------------------
+// Email verification — checks whether an address actually accepts mail.
+// Used to turn email-pattern guesses into confirmed, deliverable emails.
+// ---------------------------------------------------------------------------
+
+export type EmailVerificationResult = {
+  status: "verified" | "invalid" | "pending" | "error";
+  catchAll: boolean;
+};
+
+type VerificationResponse = {
+  verification_status?: "pending" | "verified" | "invalid";
+  catch_all?: boolean | "pending";
+};
+
+/** Verifies a single email via Instantly. Fast verifications return
+ *  immediately; slow ones get one short follow-up poll, after which the
+ *  result is reported as "pending" (inconclusive). */
+export async function verifyEmail(email: string): Promise<EmailVerificationResult> {
+  if (!isConfigured()) return { status: "error", catchAll: false };
+
+  const initial = await instantlyRequest<VerificationResponse>("/email-verification", {
+    body: { email },
+  });
+  if (!initial.ok) return { status: "error", catchAll: false };
+
+  let data = initial.data;
+  if (data.verification_status === "pending") {
+    await new Promise((resolve) => setTimeout(resolve, 4_000));
+    const poll = await instantlyRequest<VerificationResponse>(
+      `/email-verification/${encodeURIComponent(email)}`,
+      { method: "GET" },
+    );
+    if (poll.ok) data = poll.data;
+  }
+
+  const status = data.verification_status ?? "pending";
+  return {
+    status: status === "verified" || status === "invalid" ? status : "pending",
+    catchAll: data.catch_all === true,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Convenience helpers for the "healthcare facilities by county" use case
 // ---------------------------------------------------------------------------
 
