@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CreateContactModal } from "@/components/crm/create-contact-modal";
+import { FindMissingEmailsPanel } from "@/components/crm/find-missing-emails-panel";
 import { DataTable } from "@/components/crm/ui/data-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
@@ -20,8 +21,14 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
 
   let contacts: Prisma.ContactGetPayload<{ include: { account: true } }>[] = [];
   let dbWarning: string | null = null;
+  let totalContacts = 0;
+  let contactsWithEmail = 0;
 
   try {
+    [totalContacts, contactsWithEmail] = await Promise.all([
+      db.contact.count({ where: { isDoNotContact: false } }),
+      db.contact.count({ where: { isDoNotContact: false, email: { not: null } } }),
+    ]);
     contacts = await db.contact.findMany({
       where: {
         ...(filters.search
@@ -48,8 +55,13 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
     <div className="space-y-6">
       <PageHeader
         title="Contacts"
-        subtitle="Decision makers and stakeholders associated with accounts."
-        actions={<CreateContactModal />}
+        subtitle={`Decision makers and stakeholders associated with accounts.${totalContacts ? ` ${contactsWithEmail} of ${totalContacts} have an email.` : ""}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <FindMissingEmailsPanel totalContacts={totalContacts} contactsWithEmail={contactsWithEmail} />
+            <CreateContactModal />
+          </div>
+        }
       />
 
       <FilterBar>

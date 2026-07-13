@@ -1,5 +1,10 @@
+import { isInstantlyConfigured, verifyEmail } from "@/lib/instantly";
 import { parseDomain } from "@/lib/text";
 import {
+  domainAcceptsMail,
+  emailLocalPartMatchesName,
+  emailPatternCandidates,
+  extractEmailsFromText,
   findPersonContact,
   inferEmailFromSitePattern,
   scrapeSiteForContacts,
@@ -609,6 +614,58 @@ async function hunterEmailFinder(
   }
 }
 
+/** Hunts for a person's published email in Google results (via Serper) —
+ *  staff directories, PDFs, county provider lists, and association pages
+ *  often expose emails that B2B databases miss. Only accepts an address
+ *  whose local part is a recognizable form of the person's name. */
+async function serperEmailHunt(
+  fullName: string,
+  organizationName: string,
+  firstName: string | null,
+  lastName: string | null,
+  domain: string | null,
+): Promise<string | null> {
+  if (!process.env.SERPER_API_KEY) return null;
+
+  const queries = [
+    `"${fullName}" "${organizationName}" email`,
+    ...(domain ? [`"${fullName}" "@${domain}"`] : []),
+  ];
+
+  for (const query of queries) {
+    const results = await serperSearch(query);
+    const text = results.map((r) => `${r.title ?? ""} ${r.snippet ?? ""}`).join(" ");
+    for (const email of extractEmailsFromText(text)) {
+      if (emailLocalPartMatchesName(email, firstName, lastName)) return email;
+    }
+  }
+  return null;
+}
+
+/** Guess-and-verify: generates the most common corporate email shapes for
+ *  the person and checks each against Instantly's email verifier. Only a
+ *  VERIFIED, non-catch-all address is accepted, so the result is a real,
+ *  deliverable email — not a guess. */
+async function guessAndVerifyEmail(
+  firstName: string | null,
+  lastName: string | null,
+  domain: string,
+): Promise<string | null> {
+  if (!isInstantlyConfigured()) return null;
+
+  const candidates = emailPatternCandidates(firstName, lastName, domain).slice(0, 3);
+  if (!candidates.length) return null;
+  if (!(await domainAcceptsMail(domain))) return null;
+
+  for (const candidate of candidates) {
+    const result = await verifyEmail(candidate);
+    // Catch-all domains accept every address — a "verified" there proves nothing.
+    if (result.status === "verified" && !result.catchAll) return candidate;
+    if (result.status === "error") return null; // API problem — stop burning credits
+  }
+  return null;
+}
+
 /** Finds a person's LinkedIn profile via Serper — free-tier step that also
  *  makes the Apollo/PDL backup lookups far more precise. */
 async function findLinkedinForPerson(
@@ -697,13 +754,19 @@ async function enrichContactFromApollo(input: {
  *
  *   1. The facility's own website (free) — staff/contact pages often list
  *      the exact person's email and direct phone.
- *   2. Hunter email finder (non-Apollo/PDL, uses Hunter credits).
- *   3. LinkedIn profile lookup via Serper (free tier of value on its own,
+ *   2. Google/SERP email hunt via Serper — directories, PDFs, and state
+ *      provider lists publish emails that B2B databases miss; only accepts
+ *      addresses whose local part matches the person's name.
+ *   3. Hunter email finder (non-Apollo/PDL, uses Hunter credits).
+ *   4. LinkedIn profile lookup via Serper (free tier of value on its own,
  *      and it sharpens the paid lookups below).
- *   4. Apollo people/match — BACKUP (requires APOLLO_PLAN_ENABLED).
- *   5. People Data Labs — BACKUP.
- *   6. Site email-pattern guess (first.last@) — last resort, clearly
- *      low-confidence and MX-verified.
+ *   5. Apollo people/match — BACKUP (requires APOLLO_PLAN_ENABLED).
+ *   6. People Data Labs — BACKUP.
+ *   7. Guess-and-verify — generates common email shapes and confirms them
+ *      with Instantly's verifier; only VERIFIED non-catch-all addresses
+ *      are accepted.
+ *   8. Site email-pattern guess (first.last@) — true last resort, clearly
+ *      low-confidence and MX-verified only.
  */
 export async function enrichContactByName(
   input: {
@@ -756,8 +819,26 @@ export async function enrichContactByName(
     }
   }
 
-  // ---- 2. Hunter email finder (non-Apollo/PDL) ----
+  // ---- 2. Google/SERP email hunt (Serper) ----
   const domain = input.domain ?? site?.domain ?? null;
+  const fullNameEarly = cleaned.fullName ?? [firstName, lastName].filter(Boolean).join(" ");
+  if (!email && fullNameEarly && firstName && lastName) {
+    const hunted = await serperEmailHunt(
+      fullNameEarly,
+      input.organizationName,
+      firstName,
+      lastName,
+      domain,
+    );
+    if (hunted) {
+      email = hunted;
+      emailSource = "serper_email_hunt";
+      confidence = 0.75;
+      sourcesUsed.push("serper_email_hunt");
+    }
+  }
+
+  // ---- 3. Hunter email finder (non-Apollo/PDL) ----
   if (!email && firstName && lastName && domain) {
     const hunterHit = await hunterEmailFinder(firstName, lastName, domain);
     if (hunterHit) {
@@ -770,14 +851,14 @@ export async function enrichContactByName(
     }
   }
 
-  // ---- 3. LinkedIn profile via Serper (free-tier value + sharpens backups) ----
-  const fullNameForSearch = cleaned.fullName ?? [firstName, lastName].filter(Boolean).join(" ");
+  // ---- 4. LinkedIn profile via Serper (free-tier value + sharpens backups) ----
+  const fullNameForSearch = fullNameEarly;
   if (!linkedinUrl && fullNameForSearch) {
     linkedinUrl = await findLinkedinForPerson(fullNameForSearch, input.organizationName);
     if (linkedinUrl) sourcesUsed.push("serper");
   }
 
-  // ---- 4/5. Paid backups — only when the free tier didn't find an email ----
+  // ---- 5/6. Paid backups — only when the free tier didn't find an email ----
   if (!email) {
     const backup =
       (await enrichContactFromApollo({
@@ -807,7 +888,18 @@ export async function enrichContactByName(
     }
   }
 
-  // ---- 6. Last resort: pattern guess from the site's own email format ----
+  // ---- 7. Guess-and-verify via Instantly's email verifier ----
+  if (!email && domain && firstName && lastName) {
+    const verified = await guessAndVerifyEmail(firstName, lastName, domain);
+    if (verified) {
+      email = verified;
+      emailSource = "verified_pattern";
+      confidence = Math.max(confidence, 0.9);
+      sourcesUsed.push("verified_pattern");
+    }
+  }
+
+  // ---- 8. Last resort: unverified pattern guess from the site's own format ----
   if (!email && site) {
     const guessed = await inferEmailFromSitePattern(site, firstName, lastName);
     if (guessed) {

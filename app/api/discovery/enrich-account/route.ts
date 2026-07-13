@@ -7,6 +7,10 @@ import { parseDomain } from "@/lib/text";
 import { scrapeSiteForContacts } from "@/lib/web-contact-scraper";
 import { NextRequest } from "next/server";
 
+// Multi-tier enrichment across up to 10 contacts plus company-level
+// discovery can exceed Vercel's default function timeout.
+export const maxDuration = 60;
+
 // How many existing contacts (missing email/phone) to enrich per click.
 // The free website scrape covers all of them at no cost; this cap bounds
 // the Hunter/Apollo/PDL fallback calls (time + credits).

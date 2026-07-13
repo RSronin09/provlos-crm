@@ -21,6 +21,19 @@ const USER_AGENT =
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE_REGEX = /(?:\(\d{3}\)\s?|\d{3}[-.\s])\d{3}[-.\s]\d{4}/g;
 
+/** Pulls plausible email addresses out of arbitrary text (search snippets,
+ *  page content), filtering asset filenames and placeholder domains. */
+export function extractEmailsFromText(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.matchAll(EMAIL_REGEX)) {
+    const email = match[0].toLowerCase().replace(/^mailto:/, "");
+    if (/\.(png|jpg|jpeg|gif|svg|webp|css|js)$/.test(email)) continue;
+    if (/@(example|sentry|wixpress|placeholder|domain|email|yourdomain)\./.test(email)) continue;
+    found.add(email);
+  }
+  return [...found];
+}
+
 // Local parts that are mailboxes, not people.
 const GENERIC_LOCAL_PARTS =
   /^(info|contact|admin|office|hello|admissions|marketing|hr|jobs|careers|billing|frontdesk|reception|support|sales|inquiries|webmaster|noreply|no-reply|privacy|media|press|referrals?)$/i;
@@ -52,17 +65,7 @@ function htmlToText(html: string): string {
     .replace(/\s+/g, " ");
 }
 
-function extractEmails(html: string): string[] {
-  const found = new Set<string>();
-  for (const match of html.matchAll(EMAIL_REGEX)) {
-    const email = match[0].toLowerCase().replace(/^mailto:/, "");
-    // Filter obvious junk: asset filenames, tracking domains, placeholder addresses.
-    if (/\.(png|jpg|jpeg|gif|svg|webp|css|js)$/.test(email)) continue;
-    if (/@(example|sentry|wixpress|placeholder|domain|email|yourdomain)\./.test(email)) continue;
-    found.add(email);
-  }
-  return [...found];
-}
+const extractEmails = extractEmailsFromText;
 
 function isPersonalEmail(email: string): boolean {
   const local = email.split("@")[0];
@@ -168,6 +171,38 @@ function localPartCandidates(first: string, last: string): string[] {
     `${first}${last}`,
     `${last}${first[0]}`,
     `${last}.${first}`,
+  ];
+}
+
+/** True when an email's local part is a recognizable form of the person's
+ *  name (jane.doe@, jdoe@, janedoe@, ...). */
+export function emailLocalPartMatchesName(
+  email: string,
+  firstName: string | null,
+  lastName: string | null,
+): boolean {
+  const first = normalizeNamePart(firstName);
+  const last = normalizeNamePart(lastName);
+  if (!first || !last) return false;
+  const local = email.toLowerCase().split("@")[0].replace(/[^a-z0-9._-]/g, "");
+  return new Set(localPartCandidates(first, last)).has(local);
+}
+
+/** Candidate addresses for guess-and-verify, most common shapes first. */
+export function emailPatternCandidates(
+  firstName: string | null,
+  lastName: string | null,
+  domain: string,
+): string[] {
+  const first = normalizeNamePart(firstName);
+  const last = normalizeNamePart(lastName);
+  if (!first || !last) return [];
+  return [
+    `${first}.${last}@${domain}`,
+    `${first[0]}${last}@${domain}`,
+    `${first}@${domain}`,
+    `${first}${last}@${domain}`,
+    `${first}${last[0]}@${domain}`,
   ];
 }
 
