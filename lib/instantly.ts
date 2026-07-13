@@ -17,7 +17,8 @@ import {
   type InstantlyEmployeeCountBracket,
 } from "@/lib/instantly-constants";
 
-const INSTANTLY_API_BASE = "https://api.instantly.ai/api/v2";
+// Overridable so the integration can be tested against a mock server.
+const INSTANTLY_API_BASE = process.env.INSTANTLY_API_BASE ?? "https://api.instantly.ai/api/v2";
 
 // Re-exported for backwards-compatible imports — the canonical source of
 // truth for these constants is lib/instantly-constants.ts (kept dependency-free
@@ -96,14 +97,17 @@ export type InstantlyEnrichedLead = {
   country?: string | null;
 };
 
+// Per the OpenAPI spec, both count and preview return the match total in
+// `number_of_leads`. (`total_result_count` never existed in the API — reading
+// it made every count display as zero regardless of actual matches.)
 type PreviewResponse = {
   leads?: InstantlyPreviewLead[];
-  total_result_count?: number;
+  number_of_leads?: number;
   number_of_redacted_results?: number;
 };
 
 type CountResponse = {
-  total_result_count?: number;
+  number_of_leads?: number;
 };
 
 type EnrichResponse = {
@@ -183,7 +187,7 @@ export async function countLeadsFromSuperSearch(
     body: { search_filters: filters },
   });
   if (!result.ok) return { ok: false, count: 0, error: result.error };
-  return { ok: true, count: result.data.total_result_count ?? 0 };
+  return { ok: true, count: result.data.number_of_leads ?? 0 };
 }
 
 /** Free — returns a sample of matching leads (name, title, company, LinkedIn —
@@ -198,7 +202,7 @@ export async function previewLeadsFromSuperSearch(
   return {
     ok: true,
     leads: result.data.leads ?? [],
-    totalCount: result.data.total_result_count ?? 0,
+    totalCount: result.data.number_of_leads ?? result.data.leads?.length ?? 0,
   };
 }
 
