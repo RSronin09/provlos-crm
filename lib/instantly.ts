@@ -224,6 +224,10 @@ export async function enrichLeadsFromSuperSearch(params: {
       list_name: params.listName,
       resource_id: params.resourceId,
       skip_rows_without_email: params.skipRowsWithoutEmail ?? true,
+      // The API rejects requests with no enrichment type enabled
+      // ("At least one enrichment type must be enabled"). Verified work
+      // emails are the whole point of this step.
+      work_email_enrichment: true,
     },
   });
   if (!result.ok) return { ok: false, error: result.error };
