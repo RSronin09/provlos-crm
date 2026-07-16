@@ -283,7 +283,8 @@ export function SpreadsheetImport() {
             <h3 className="text-sm font-semibold text-slate-800">Column Mapping</h3>
             <p className="text-xs text-slate-500 mt-0.5">
               We auto-detected {Object.values(mapping).filter(Boolean).length} of{" "}
-              {rows.length} rows. Adjust if needed.
+              {headers.length} column{headers.length !== 1 ? "s" : ""} across {rows.length}{" "}
+              row{rows.length !== 1 ? "s" : ""}. Adjust if needed.
             </p>
           </div>
 

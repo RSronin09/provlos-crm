@@ -376,7 +376,7 @@ export function InstantlySearchPanel() {
                 {previewLeads.map((lead, i) => (
                   <tr key={i} className="text-slate-700">
                     <td className="px-3 py-2">
-                      {lead.fullName ?? [lead.firstName, lead.lastName].filter(Boolean).join(" ") ?? "—"}
+                      {lead.fullName || [lead.firstName, lead.lastName].filter(Boolean).join(" ") || "—"}
                     </td>
                     <td className="px-3 py-2">{lead.jobTitle ?? "—"}</td>
                     <td className="px-3 py-2">{lead.companyName ?? "—"}</td>
@@ -396,10 +396,10 @@ export function InstantlySearchPanel() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-        <h3 className="font-semibold text-slate-800">3. Import Results</h3>
+        <h3 className="font-semibold text-slate-800">4. Import Results</h3>
         <p className="text-sm text-slate-500">
           Enrichment runs in the background on Instantly&apos;s side and can take a few minutes. Once it&apos;s done,
-          paste the resulting list/resource ID below (auto-filled after step 2) and import the verified contacts
+          paste the resulting list/resource ID below (auto-filled after step 3) and import the verified contacts
           straight into Accounts &amp; Contacts.
         </p>
         <div className="flex flex-wrap items-end gap-3">
