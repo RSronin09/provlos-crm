@@ -1,7 +1,7 @@
 "use client";
 
 import { useAdminToken } from "@/lib/use-admin-token";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Contact = {
   id: string;
@@ -9,10 +9,12 @@ type Contact = {
   firstName: string | null;
   lastName: string | null;
   title: string | null;
+  department: string | null;
   email: string | null;
   phone: string | null;
   linkedinUrl: string | null;
   confidenceScore: number | null;
+  source: string | null;
 };
 
 type SearchResult = {
@@ -59,6 +61,41 @@ export function DecisionMakerSearch() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // When fresh preview results arrive, pre-select the contacts worth keeping —
+  // anyone with an email or phone. Name-only hits (common from web search) start
+  // unchecked so junk leads don't get saved unless the user opts in.
+  useEffect(() => {
+    if (!result || result.source === "existing") {
+      setSelectedIds(new Set());
+      return;
+    }
+    const worthKeeping = result.contacts.filter((c) => c.email || c.phone);
+    const defaults = (worthKeeping.length ? worthKeeping : result.contacts).map((c) => c.id);
+    setSelectedIds(new Set(defaults));
+  }, [result]);
+
+  const isPreview = !!result && result.source !== "existing";
+  const selectedCount = selectedIds.size;
+  const allSelected = useMemo(
+    () => !!result && result.contacts.length > 0 && result.contacts.every((c) => selectedIds.has(c.id)),
+    [result, selectedIds],
+  );
+
+  function toggleContact(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (!result) return;
+    setSelectedIds(allSelected ? new Set() : new Set(result.contacts.map((c) => c.id)));
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,6 +144,12 @@ export function DecisionMakerSearch() {
   async function addToCrm() {
     if (!result) return;
 
+    const contactsToSave = result.contacts.filter((contact) => selectedIds.has(contact.id));
+    if (!contactsToSave.length) {
+      setStatus({ type: "error", text: "Select at least one contact to add to the CRM." });
+      return;
+    }
+
     try {
       setSaving(true);
       const response = await fetch("/api/discovery/add-to-crm", {
@@ -120,7 +163,7 @@ export function DecisionMakerSearch() {
           website: website || null,
           state: state || null,
           region: region || null,
-          contacts: result.contacts.map((contact) => ({
+          contacts: contactsToSave.map((contact) => ({
             fullName:
               contact.fullName ||
               `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
@@ -128,11 +171,14 @@ export function DecisionMakerSearch() {
             firstName: contact.firstName,
             lastName: contact.lastName,
             title: contact.title,
+            department: contact.department,
             email: contact.email,
             phone: contact.phone,
             linkedinUrl: contact.linkedinUrl,
             confidenceScore: contact.confidenceScore,
-            source: result.source,
+            // Preserve each contact's own provider so the CRM records where the
+            // data actually came from, not the aggregate of all providers.
+            source: contact.source ?? result.source,
           })),
         }),
       });
@@ -242,11 +288,21 @@ export function DecisionMakerSearch() {
           <button
             type="button"
             onClick={addToCrm}
-            disabled={saving || !result || result.source === "existing"}
+            disabled={saving || !isPreview || selectedCount === 0}
             className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 hover:bg-blue-600 transition-colors"
-            title={result?.source === "existing" ? "Already in CRM" : "Save account and contacts to CRM"}
+            title={
+              result?.source === "existing"
+                ? "Already in CRM"
+                : selectedCount === 0
+                  ? "Select at least one contact"
+                  : "Save account and selected contacts to CRM"
+            }
           >
-            {saving ? "Saving…" : result?.account ? "Update CRM" : "Add to CRM"}
+            {saving
+              ? "Saving…"
+              : result?.account
+                ? `Update CRM (${selectedCount})`
+                : `Add ${selectedCount} to CRM`}
           </button>
           {result?.account ? (
             <a
@@ -274,17 +330,38 @@ export function DecisionMakerSearch() {
               </h3>
               {sourceBadge(result.source)}
             </div>
-            <span className="text-xs text-slate-500">{result.contacts.length} contact(s)</span>
+            <span className="text-xs text-slate-500">
+              {isPreview
+                ? `${selectedCount} of ${result.contacts.length} selected`
+                : `${result.contacts.length} contact(s)`}
+            </span>
           </div>
           {result.note ? (
             <p className="px-5 py-2 text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
               {result.note}
             </p>
           ) : null}
+          {isPreview ? (
+            <p className="px-5 py-2 text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
+              Contacts with an email or phone are pre-selected. Uncheck anyone you don&apos;t
+              want, then click <span className="font-medium">Add to CRM</span>.
+            </p>
+          ) : null}
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-slate-500 text-xs font-medium uppercase tracking-wide">
                 <tr>
+                  {isPreview ? (
+                    <th className="px-5 py-3 text-left w-8">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                        aria-label="Select all contacts"
+                      />
+                    </th>
+                  ) : null}
                   <th className="px-5 py-3 text-left">Name</th>
                   <th className="px-5 py-3 text-left">Title</th>
                   <th className="px-5 py-3 text-left">Email</th>
@@ -295,7 +372,25 @@ export function DecisionMakerSearch() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {result.contacts.map((contact) => (
-                  <tr key={contact.id} className="hover:bg-slate-50 transition-colors">
+                  <tr
+                    key={contact.id}
+                    className={`transition-colors ${
+                      isPreview && !selectedIds.has(contact.id)
+                        ? "bg-slate-50/60 hover:bg-slate-100"
+                        : "hover:bg-slate-50"
+                    }`}
+                  >
+                    {isPreview ? (
+                      <td className="px-5 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(contact.id)}
+                          onChange={() => toggleContact(contact.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                          aria-label={`Select ${contact.fullName ?? "contact"}`}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-5 py-3 font-medium text-slate-800">
                       {contact.fullName || `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() || "—"}
                     </td>
