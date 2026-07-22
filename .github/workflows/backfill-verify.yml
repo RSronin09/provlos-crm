@@ -1,0 +1,99 @@
+name: Backfill-verify legacy emails
+
+# Manually-triggered batch runner: every email saved before the verification
+# gate existed gets checked against Instantly's verifier. Runs on GitHub's
+# infrastructure so it survives laptops going to sleep. Requires the
+# CRM_ADMIN_TOKEN repository secret and INSTANTLY_API_KEY on Vercel.
+on:
+  workflow_dispatch:
+    inputs:
+      cursor:
+        description: "Resume cursor (contact id) — leave empty to start from the beginning"
+        required: false
+        default: ""
+      batch_size:
+        description: "Contacts per API call (1-10, server-enforced). 5 is the measured safe default."
+        required: false
+        default: "5"
+
+jobs:
+  backfill-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Run verification loop
+        env:
+          BASE: https://provlos-crm.vercel.app
+          TOKEN: ${{ secrets.CRM_ADMIN_TOKEN }}
+          CURSOR: ${{ inputs.cursor }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+        run: |
+          set -u
+          if [ -z "$TOKEN" ]; then
+            echo "CRM_ADMIN_TOKEN secret is not set" >&2
+            exit 1
+          fi
+
+          TOTAL_PROCESSED=0
+          TOTAL_VERIFIED=0
+          TOTAL_RISKY=0
+          TOTAL_INVALID=0
+          BATCH=0
+          FAILS=0
+
+          while :; do
+            BATCH=$((BATCH + 1))
+            SIZE=$BATCH_SIZE
+            if [ "$FAILS" -ge 3 ]; then SIZE=1; elif [ "$FAILS" -ge 1 ]; then SIZE=3; fi
+            if [ -n "$CURSOR" ]; then
+              BODY="{\"batchSize\":$SIZE,\"cursor\":\"$CURSOR\"}"
+            else
+              BODY="{\"batchSize\":$SIZE}"
+            fi
+
+            RESP=$(curl -s -m 120 -X POST "$BASE/api/maintenance/backfill-verify-emails" \
+              -H "content-type: application/json" -H "x-admin-token: $TOKEN" -d "$BODY" || true)
+
+            PARSED=$(node -e "
+              try {
+                const r = JSON.parse(process.argv[1]);
+                const d = r.data || {};
+                console.log([d.processed ?? -1, d.verified ?? 0, d.risky ?? 0, d.invalid ?? 0, d.nextCursor ?? '', d.totalUnchecked ?? -1].join('|'));
+              } catch { console.log('PARSE_ERROR'); }
+            " "$RESP" 2>/dev/null)
+
+            if [ "$PARSED" = "PARSE_ERROR" ] || [ -z "$PARSED" ]; then
+              FAILS=$((FAILS + 1))
+              echo "Batch $BATCH: bad response (fail $FAILS/30): $(echo "$RESP" | head -c 200)"
+              if [ "$FAILS" -ge 30 ]; then
+                echo "## Backfill-verify aborted" >> "$GITHUB_STEP_SUMMARY"
+                echo "30 consecutive failures. Resume cursor: \`$CURSOR\`" >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+              fi
+              sleep 60
+              continue
+            fi
+            FAILS=0
+
+            PROCESSED=$(echo "$PARSED" | cut -d'|' -f1)
+            VERIFIED=$(echo "$PARSED" | cut -d'|' -f2)
+            RISKY=$(echo "$PARSED" | cut -d'|' -f3)
+            INVALID=$(echo "$PARSED" | cut -d'|' -f4)
+            NEXT=$(echo "$PARSED" | cut -d'|' -f5)
+            REMAINING=$(echo "$PARSED" | cut -d'|' -f6)
+
+            TOTAL_PROCESSED=$((TOTAL_PROCESSED + PROCESSED))
+            TOTAL_VERIFIED=$((TOTAL_VERIFIED + VERIFIED))
+            TOTAL_RISKY=$((TOTAL_RISKY + RISKY))
+            TOTAL_INVALID=$((TOTAL_INVALID + INVALID))
+            echo "Batch $BATCH: processed=$PROCESSED verified=$VERIFIED risky=$RISKY invalid=$INVALID | totals: processed=$TOTAL_PROCESSED verified=$TOTAL_VERIFIED risky=$TOTAL_RISKY invalid=$TOTAL_INVALID remaining=$REMAINING | cursor=$NEXT"
+
+            if [ -z "$NEXT" ]; then
+              echo "## Backfill-verify complete ✅" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Emails checked: **$TOTAL_PROCESSED** across $BATCH batches" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Verified: **$TOTAL_VERIFIED** · Risky: **$TOTAL_RISKY** · Invalid: **$TOTAL_INVALID**" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+            CURSOR="$NEXT"
+            sleep 2
+          done
