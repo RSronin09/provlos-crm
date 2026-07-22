@@ -41,10 +41,16 @@ jobs:
 
           while :; do
             BATCH=$((BATCH + 1))
+            # Adaptive sizing: a batch that keeps failing at the same cursor is
+            # usually too heavy for the serverless window (many slow facility
+            # sites at once) — shrink it until it fits instead of retrying the
+            # same oversized request forever.
+            SIZE=$BATCH_SIZE
+            if [ "$FAILS" -ge 5 ]; then SIZE=1; elif [ "$FAILS" -ge 2 ]; then SIZE=5; fi
             if [ -n "$CURSOR" ]; then
-              BODY="{\"batchSize\":$BATCH_SIZE,\"cursor\":\"$CURSOR\"}"
+              BODY="{\"batchSize\":$SIZE,\"cursor\":\"$CURSOR\"}"
             else
-              BODY="{\"batchSize\":$BATCH_SIZE}"
+              BODY="{\"batchSize\":$SIZE}"
             fi
 
             RESP=$(curl -s -m 120 -X POST "$BASE/api/discovery/find-missing-emails" \

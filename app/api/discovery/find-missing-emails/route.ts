@@ -93,12 +93,18 @@ export async function POST(request: NextRequest) {
   // ---- Stage 1: per account (once, in parallel): resolve + scrape the
   // website, and secure the facility's main phone line as the guaranteed
   // fallback channel for contacts the cascade can't find a direct phone for.
+  // Hard ceiling for the whole prep stage: with 20 contacts across 20 slow
+  // facility sites, uncapped prep alone can blow past the platform's 60s
+  // function limit. Accounts not prepped in time fall back to their stored
+  // website/phone and skip the scrape.
+  const STAGE1_BUDGET_MS = 15_000;
+
   const siteCache = new Map<
     string,
     { website: string | null; site: ScrapedSite | null; mainLinePhone: string | null }
   >();
   const accountIds = [...new Set(contacts.map((c) => c.account.id))];
-  await Promise.all(
+  const stage1 = Promise.all(
     accountIds.map(async (accountId) => {
       const account = contacts.find((c) => c.account.id === accountId)!.account;
       let website = account.website;
@@ -137,6 +143,17 @@ export async function POST(request: NextRequest) {
       siteCache.set(accountId, { website, site, mainLinePhone });
     }),
   );
+  await Promise.race([stage1, new Promise((resolve) => setTimeout(resolve, STAGE1_BUDGET_MS))]);
+  // Accounts that missed the prep window still get their stored data.
+  for (const contact of contacts) {
+    if (!siteCache.has(contact.account.id)) {
+      siteCache.set(contact.account.id, {
+        website: contact.account.website,
+        site: null,
+        mainLinePhone: contact.account.phone,
+      });
+    }
+  }
 
   // ---- Stage 2: enrich contacts in parallel chunks. Concurrency is capped
   // so provider APIs (Serper/Hunter/Instantly) aren't hammered, and the time
