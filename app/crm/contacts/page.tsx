@@ -24,11 +24,13 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
   let dbWarning: string | null = null;
   let totalContacts = 0;
   let contactsWithEmail = 0;
+  let unverifiedCount = 0;
 
   try {
-    [totalContacts, contactsWithEmail] = await Promise.all([
-      db.contact.count({ where: { isDoNotContact: false } }),
-      db.contact.count({ where: { isDoNotContact: false, email: { not: null } } }),
+    [totalContacts, contactsWithEmail, unverifiedCount] = await Promise.all([
+      db.contact.count({ where: { isDoNotContact: false, isUnverifiedIdentity: false } }),
+      db.contact.count({ where: { isDoNotContact: false, isUnverifiedIdentity: false, email: { not: null } } }),
+      db.contact.count({ where: { isUnverifiedIdentity: true } }),
     ]);
     contacts = await db.contact.findMany({
       where: {
@@ -56,7 +58,7 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
     <div className="space-y-6">
       <PageHeader
         title="Contacts"
-        subtitle={`Decision makers and stakeholders associated with accounts.${totalContacts ? ` ${contactsWithEmail} of ${totalContacts} have an email.` : ""}`}
+        subtitle={`Decision makers and stakeholders associated with accounts.${totalContacts ? ` ${contactsWithEmail} of ${totalContacts} have an email.` : ""}${unverifiedCount ? ` ${unverifiedCount} more are unverified and excluded from outreach.` : ""}`}
         actions={
           <div className="flex items-center gap-2">
             <FindMissingEmailsPanel totalContacts={totalContacts} contactsWithEmail={contactsWithEmail} />
@@ -90,13 +92,24 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
         ]}
       >
         {contacts.map((contact) => (
-          <tr key={contact.id} className="border-t border-slate-200 hover:bg-slate-50">
+          <tr
+            key={contact.id}
+            className={`border-t border-slate-200 hover:bg-slate-50 ${contact.isUnverifiedIdentity ? "opacity-60" : ""}`}
+          >
             <td className="px-4 py-3 font-medium">
               <Link href={`/crm/contacts/${contact.id}`} className="hover:underline">
                 {contact.fullName ||
                   `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() ||
                   "Unnamed contact"}
               </Link>
+              {contact.isUnverifiedIdentity ? (
+                <span
+                  title="Identity came from the retired name-guessing discovery — never confirmed. Excluded from outreach."
+                  className="ml-1.5 inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600"
+                >
+                  Unverified
+                </span>
+              ) : null}
             </td>
             <td className="px-4 py-3">
               <ReachabilitySummary

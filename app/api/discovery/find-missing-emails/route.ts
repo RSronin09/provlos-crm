@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
   const whereMissingEmail: Prisma.ContactWhereInput = {
     email: null,
     isDoNotContact: false,
+    isUnverifiedIdentity: false,
     OR: [{ fullName: { not: null } }, { AND: [{ firstName: { not: null } }, { lastName: { not: null } }] }],
   };
 

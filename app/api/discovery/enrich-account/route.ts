@@ -38,6 +38,10 @@ export async function POST(request: NextRequest) {
       city: true,
       state: true,
       contacts: {
+        // Unverified-identity contacts (from the retired name-guessing
+        // discovery) are excluded — no point spending lookup credits
+        // chasing a channel for a person who may not work here at all.
+        where: { isUnverifiedIdentity: false },
         select: {
           id: true,
           firstName: true,

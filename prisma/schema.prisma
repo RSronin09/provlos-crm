@@ -290,6 +290,12 @@ model Contact {
   source         String?
   lastVerifiedAt DateTime?
   isDoNotContact Boolean        @default(false)
+  /** True when this contact's IDENTITY (not just a channel) came from the
+   *  retired Serper name-guessing discovery — no employer/location check was
+   *  ever run. Distinct from isDoNotContact (a compliance opt-out): this is
+   *  a data-trust flag. Excluded from outreach and enrichment credit spend
+   *  until manually confirmed or matched by a trusted source. */
+  isUnverifiedIdentity Boolean  @default(false)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -302,6 +308,7 @@ model Contact {
   @@index([email])
   @@index([lastName])
   @@index([isDoNotContact])
+  @@index([isUnverifiedIdentity])
 }
 
 model Activity {
