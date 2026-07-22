@@ -78,30 +78,36 @@ export async function POST(request: NextRequest) {
   let found = 0;
   let processedThrough: string | null = null;
 
-  // Cache website resolution + scrape per account within the batch.
+  // ---- Stage 1: resolve + scrape each account's website ONCE, in parallel.
   const siteCache = new Map<string, { website: string | null; site: ScrapedSite | null }>();
-
-  for (const contact of contacts) {
-    if (Date.now() - startedAt > TIME_BUDGET_MS && processedThrough) break;
-
-    let cached = siteCache.get(contact.account.id);
-    if (!cached) {
-      let website = contact.account.website;
+  const accountIds = [...new Set(contacts.map((c) => c.account.id))];
+  await Promise.all(
+    accountIds.map(async (accountId) => {
+      const account = contacts.find((c) => c.account.id === accountId)!.account;
+      let website = account.website;
       if (!website && process.env.SERPER_API_KEY) {
         try {
-          website = await resolveWebsite(contact.account.companyName);
+          website = await resolveWebsite(account.companyName);
           if (website) {
-            await db.account.update({ where: { id: contact.account.id }, data: { website } });
+            await db.account.update({ where: { id: accountId }, data: { website } });
           }
         } catch {
           website = null;
         }
       }
       const site = website ? await scrapeSiteForContacts(website) : null;
-      cached = { website, site };
-      siteCache.set(contact.account.id, cached);
-    }
+      siteCache.set(accountId, { website, site });
+    }),
+  );
 
+  // ---- Stage 2: enrich contacts in parallel chunks. Concurrency is capped
+  // so provider APIs (Serper/Hunter/Instantly) aren't hammered, and the time
+  // budget is checked between chunks so we return a cursor instead of letting
+  // the serverless runtime kill the invocation mid-write.
+  const CONCURRENCY = 5;
+
+  const enrichOne = async (contact: (typeof contacts)[number]) => {
+    const cached = siteCache.get(contact.account.id) ?? { website: null, site: null };
     let email: string | null = null;
     let source: string | null = null;
     try {
@@ -153,7 +159,13 @@ export async function POST(request: NextRequest) {
       email,
       source,
     });
-    processedThrough = contact.id;
+  };
+
+  for (let i = 0; i < contacts.length; i += CONCURRENCY) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS && processedThrough) break;
+    const chunk = contacts.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map(enrichOne));
+    processedThrough = chunk[chunk.length - 1].id;
   }
 
   const processed = results.length;
