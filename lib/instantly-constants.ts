@@ -75,8 +75,22 @@ export type InstantlyLevel = (typeof INSTANTLY_LEVELS)[number];
  *  county itself, e.g. from https://developers.google.com/maps/documentation/places/web-service/place-id)
  *  can be used instead of city/state — see `InstantlyLocation` in lib/instantly.ts. */
 export const FLORIDA_COUNTY_CITIES: Record<string, string[]> = {
+  "Sarasota County, FL": ["Sarasota", "Venice", "North Port", "Englewood", "Osprey", "Nokomis", "Siesta Key"],
+  "Manatee County, FL": [
+    "Bradenton",
+    "Palmetto",
+    "Ellenton",
+    "Parrish",
+    "Lakewood Ranch",
+    "Anna Maria",
+    "Holmes Beach",
+    "Bradenton Beach",
+    "Longboat Key",
+    "Myakka City",
+  ],
+  // Outside the core territory — kept for optional searching, NOT part of the
+  // geofenced universe (see lib/territory.ts).
   "Lee County, FL": ["Fort Myers", "Cape Coral", "Bonita Springs", "Estero", "Lehigh Acres", "Sanibel"],
-  "Sarasota County, FL": ["Sarasota", "Venice", "North Port", "Englewood", "Osprey", "Nokomis"],
 };
 
 /** Job titles worth targeting at healthcare facilities for NEMT sales —

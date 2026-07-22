@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { enrichContactByName } from "@/lib/decision-makers";
 import { getFacilityPreset, resolveCities, searchNpiFacilities, type NpiFacility } from "@/lib/npi";
 import { saveDiscoveredContacts } from "@/lib/save-contacts";
+import { isInTargetTerritory } from "@/lib/territory";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 60;
@@ -42,7 +43,16 @@ export async function POST(request: NextRequest) {
   });
 
   const npiFilter = parsed.data.npis?.length ? new Set(parsed.data.npis) : null;
-  const toImport = npiFilter ? facilities.filter((f) => npiFilter.has(f.npi)) : facilities;
+  const requested = npiFilter ? facilities.filter((f) => npiFilter.has(f.npi)) : facilities;
+
+  // Hard geofence: only facilities inside the target territory (Sarasota +
+  // Manatee counties) enter the CRM. Out-of-territory rows are reported back,
+  // never silently imported. Unknown-city rows are treated as out until a
+  // human confirms them.
+  const toImport = requested.filter((f) => isInTargetTerritory(f.city, f.state) === true);
+  const skippedOutOfTerritory = requested
+    .filter((f) => isInTargetTerritory(f.city, f.state) !== true)
+    .map((f) => ({ npi: f.npi, name: f.organizationName, city: f.city, state: f.state }));
 
   let accountsCreated = 0;
   let accountsMatched = 0;
@@ -174,6 +184,7 @@ export async function POST(request: NextRequest) {
         accountsMatched,
         contactsCreated,
         contactsUpdated,
+        skippedOutOfTerritory,
         emailEnrichAttempted,
         emailsFound,
         emailEnrichCapped:
@@ -181,7 +192,7 @@ export async function POST(request: NextRequest) {
             ? MAX_EMAIL_ENRICH
             : null,
       },
-      message: `Imported ${accountsCreated} new facilities (${accountsMatched} already in CRM) with ${contactsCreated} decision-maker contacts${parsed.data.enrichEmails ? `; found ${emailsFound} email(s)` : ""}.`,
+      message: `Imported ${accountsCreated} new facilities (${accountsMatched} already in CRM) with ${contactsCreated} decision-maker contacts${skippedOutOfTerritory.length ? `; ${skippedOutOfTerritory.length} skipped as outside Sarasota/Manatee territory` : ""}${parsed.data.enrichEmails ? `; found ${emailsFound} email(s)` : ""}.`,
     },
     { status: 201 },
   );

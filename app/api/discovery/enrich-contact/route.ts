@@ -1,8 +1,8 @@
 import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
-import { lookupPlace } from "@/lib/places";
+import { enrichContactByName } from "@/lib/decision-makers";
+import { lookupPlace, resolveWebsiteSafe } from "@/lib/places";
 import { parseDomain } from "@/lib/text";
 import { NextRequest } from "next/server";
 
@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
   let website = contact.account.website;
   if (!website && process.env.SERPER_API_KEY) {
     try {
-      website = await resolveWebsite(contact.account.companyName);
+      website = await resolveWebsiteSafe(contact.account.companyName, {
+        city: contact.account.city,
+        state: contact.account.state,
+      });
       if (website) {
         await db.account.update({ where: { id: contact.account.id }, data: { website } });
       }

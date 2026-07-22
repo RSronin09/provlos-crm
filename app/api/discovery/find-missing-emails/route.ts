@@ -1,7 +1,7 @@
 import { unauthorizedResponse, zodErrorResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
+import { enrichContactByName } from "@/lib/decision-makers";
 import { lookupPlace } from "@/lib/places";
 import { parseDomain } from "@/lib/text";
 import { scrapeSiteForContacts, type ScrapedSite } from "@/lib/web-contact-scraper";
@@ -116,34 +116,31 @@ export async function POST(request: NextRequest) {
     accountIds.map(async (accountId) => {
       const account = contacts.find((c) => c.account.id === accountId)!.account;
       let website = account.website;
-      if (!website && process.env.SERPER_API_KEY) {
-        try {
-          website = await resolveWebsite(account.companyName);
-          if (website) {
-            await db.account.update({ where: { id: accountId }, data: { website } });
-          }
-        } catch {
-          website = null;
-        }
-      }
-
       let mainLinePhone = account.phone;
-      if (!mainLinePhone) {
+
+      // One name-matched Google Business lookup covers both gaps: the
+      // website (identity-proven — never a blind first-Google-hit, which
+      // caused the domain-poisoning incidents) and the main-line phone.
+      if (!website || !mainLinePhone) {
         try {
           const place = await lookupPlace(account.companyName, {
             city: account.city,
             state: account.state,
             domain: parseDomain(website),
           });
-          if (place?.phone) {
-            mainLinePhone = place.phone;
+          if (place && (place.website || place.phone)) {
+            website = website ?? place.website;
+            mainLinePhone = mainLinePhone ?? place.phone;
             await db.account.update({
               where: { id: accountId },
-              data: { phone: place.phone, website: website ?? place.website ?? undefined },
+              data: {
+                website: website ?? undefined,
+                phone: mainLinePhone ?? undefined,
+              },
             });
           }
         } catch {
-          mainLinePhone = null;
+          // keep whatever the account already had
         }
       }
 

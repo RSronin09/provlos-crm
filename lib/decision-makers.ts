@@ -70,17 +70,6 @@ async function serperSearch(query: string) {
   }
 }
 
-export async function resolveWebsite(companyName: string, providedWebsite?: string | null) {
-  if (providedWebsite) return providedWebsite;
-
-  const results = await serperSearch(`${companyName} official website`);
-  const firstWebsite = results.find((result) => {
-    const link = result.link || "";
-    return link.startsWith("http") && !link.includes("linkedin.com");
-  });
-  return firstWebsite?.link ?? null;
-}
-
 type ApolloEnrichedPerson = {
   id: string;
   first_name?: string;

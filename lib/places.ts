@@ -101,3 +101,22 @@ export async function lookupPlace(
     return null;
   }
 }
+
+/**
+ * Website resolution with identity proof — replaces the old blind
+ * "first Google hit" resolver, which was the root cause of the domain-
+ * poisoning incidents in the data audit (a facility resolved to a marketing
+ * agency / government site, and domain-wide email search then imported that
+ * org's entire staff as facility contacts).
+ *
+ * Only returns a website when the facility's own Google Business listing
+ * (name-matched) declares it. No listing, no website — "no data" beats
+ * "wrong data".
+ */
+export async function resolveWebsiteSafe(
+  companyName: string,
+  context?: { city?: string | null; state?: string | null },
+): Promise<string | null> {
+  const place = await lookupPlace(companyName, context);
+  return place?.website ?? null;
+}
