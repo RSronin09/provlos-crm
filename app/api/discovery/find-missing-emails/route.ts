@@ -2,6 +2,7 @@ import { unauthorizedResponse, zodErrorResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
+import { lookupPlace } from "@/lib/places";
 import { parseDomain } from "@/lib/text";
 import { scrapeSiteForContacts, type ScrapedSite } from "@/lib/web-contact-scraper";
 import { Prisma } from "@prisma/client";
@@ -64,7 +65,11 @@ export async function POST(request: NextRequest) {
       : whereMissingEmail,
     orderBy: { id: "asc" },
     take: parsed.data.batchSize,
-    include: { account: { select: { id: true, companyName: true, website: true } } },
+    include: {
+      account: {
+        select: { id: true, companyName: true, website: true, phone: true, city: true, state: true },
+      },
+    },
   });
 
   if (!contacts.length) {
@@ -85,8 +90,13 @@ export async function POST(request: NextRequest) {
   let found = 0;
   let processedThrough: string | null = null;
 
-  // ---- Stage 1: resolve + scrape each account's website ONCE, in parallel.
-  const siteCache = new Map<string, { website: string | null; site: ScrapedSite | null }>();
+  // ---- Stage 1: per account (once, in parallel): resolve + scrape the
+  // website, and secure the facility's main phone line as the guaranteed
+  // fallback channel for contacts the cascade can't find a direct phone for.
+  const siteCache = new Map<
+    string,
+    { website: string | null; site: ScrapedSite | null; mainLinePhone: string | null }
+  >();
   const accountIds = [...new Set(contacts.map((c) => c.account.id))];
   await Promise.all(
     accountIds.map(async (accountId) => {
@@ -102,8 +112,29 @@ export async function POST(request: NextRequest) {
           website = null;
         }
       }
+
+      let mainLinePhone = account.phone;
+      if (!mainLinePhone) {
+        try {
+          const place = await lookupPlace(account.companyName, {
+            city: account.city,
+            state: account.state,
+            domain: parseDomain(website),
+          });
+          if (place?.phone) {
+            mainLinePhone = place.phone;
+            await db.account.update({
+              where: { id: accountId },
+              data: { phone: place.phone, website: website ?? place.website ?? undefined },
+            });
+          }
+        } catch {
+          mainLinePhone = null;
+        }
+      }
+
       const site = website ? await scrapeSiteForContacts(website) : null;
-      siteCache.set(accountId, { website, site });
+      siteCache.set(accountId, { website, site, mainLinePhone });
     }),
   );
 
@@ -114,7 +145,8 @@ export async function POST(request: NextRequest) {
   const CONCURRENCY = 5;
 
   const enrichOne = async (contact: (typeof contacts)[number]) => {
-    const cached = siteCache.get(contact.account.id) ?? { website: null, site: null };
+    const cached =
+      siteCache.get(contact.account.id) ?? { website: null, site: null, mainLinePhone: null };
     let email: string | null = null;
     let source: string | null = null;
     try {
@@ -134,22 +166,30 @@ export async function POST(request: NextRequest) {
         new Promise<null>((resolve) => setTimeout(() => resolve(null), PER_CONTACT_TIMEOUT_MS)),
       ]);
 
-      if (match && (match.email || (!contact.phone && match.phone) || (!contact.linkedinUrl && match.linkedinUrl))) {
+      const directPhone = match?.phone ?? null;
+      const bestPhone = directPhone ?? cached.mainLinePhone;
+      const hasNewData =
+        (match && (match.email || (!contact.linkedinUrl && match.linkedinUrl))) ||
+        (!contact.phone && bestPhone);
+
+      if (hasNewData) {
         await db.contact.update({
           where: { id: contact.id },
           data: {
-            email: match.email ?? undefined,
-            emailStatus: match.email ? match.emailStatus : undefined,
-            phone: contact.phone ?? match.phone ?? undefined,
-            phoneType: contact.phone ? undefined : (match.phone ? match.phoneType : undefined),
-            linkedinUrl: contact.linkedinUrl ?? match.linkedinUrl ?? undefined,
-            title: contact.title ?? match.title ?? undefined,
-            confidenceScore: Math.max(contact.confidenceScore ?? 0, match.confidenceScore),
-            source: match.source,
-            lastVerifiedAt: new Date(),
+            email: match?.email ?? undefined,
+            emailStatus: match?.email ? match.emailStatus : undefined,
+            phone: contact.phone ?? bestPhone ?? undefined,
+            phoneType: contact.phone
+              ? undefined
+              : (directPhone ? (match?.phoneType ?? "direct") : (bestPhone ? "main_line" : undefined)),
+            linkedinUrl: contact.linkedinUrl ?? match?.linkedinUrl ?? undefined,
+            title: contact.title ?? match?.title ?? undefined,
+            confidenceScore: Math.max(contact.confidenceScore ?? 0, match?.confidenceScore ?? 0),
+            source: match?.source ?? undefined,
+            lastVerifiedAt: match ? new Date() : undefined,
           },
         });
-        if (match.email) {
+        if (match?.email) {
           email = match.email;
           source = match.source;
           found++;
