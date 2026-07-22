@@ -14,7 +14,14 @@ export const maxDuration = 60;
 
 // Stop picking up new contacts after this much wall time and hand the caller
 // a cursor instead, so the UI can loop batch after batch without timeouts.
-const TIME_BUDGET_MS = 40_000;
+// Kept well under maxDuration: a chunk started just inside the budget still
+// needs room to finish before the platform kills the invocation.
+const TIME_BUDGET_MS = 25_000;
+
+// Hard per-contact ceiling — one slow facility site or a hung provider call
+// must not burn the whole invocation. A contact that exceeds this simply
+// stays unenriched (the per-contact Enrich button can retry it later).
+const PER_CONTACT_TIMEOUT_MS = 20_000;
 
 const bodySchema = z.object({
   batchSize: z.number().int().min(1).max(20).default(10),
@@ -111,18 +118,21 @@ export async function POST(request: NextRequest) {
     let email: string | null = null;
     let source: string | null = null;
     try {
-      const match = await enrichContactByName(
-        {
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          fullName: contact.fullName,
-          organizationName: contact.account.companyName,
-          domain: parseDomain(cached.website),
-          website: cached.website,
-          linkedinUrl: contact.linkedinUrl,
-        },
-        { scrapedSite: cached.site },
-      );
+      const match = await Promise.race([
+        enrichContactByName(
+          {
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            fullName: contact.fullName,
+            organizationName: contact.account.companyName,
+            domain: parseDomain(cached.website),
+            website: cached.website,
+            linkedinUrl: contact.linkedinUrl,
+          },
+          { scrapedSite: cached.site },
+        ),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), PER_CONTACT_TIMEOUT_MS)),
+      ]);
 
       if (match && (match.email || (!contact.phone && match.phone) || (!contact.linkedinUrl && match.linkedinUrl))) {
         await db.contact.update({

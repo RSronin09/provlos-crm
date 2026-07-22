@@ -1,0 +1,92 @@
+name: Re-enrich contacts
+
+# Manually-triggered batch runner: walks every contact that has a name but no
+# email through the enrichment cascade in production, following the API's
+# cursor until done. Runs on GitHub's infrastructure, so it survives laptops
+# going to sleep. Requires the CRM_ADMIN_TOKEN repository secret.
+on:
+  workflow_dispatch:
+    inputs:
+      cursor:
+        description: "Resume cursor (contact id) — leave empty to start from the beginning"
+        required: false
+        default: ""
+      batch_size:
+        description: "Contacts per API call (1-20)"
+        required: false
+        default: "20"
+
+jobs:
+  reenrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Run enrichment loop
+        env:
+          BASE: https://provlos-crm.vercel.app
+          TOKEN: ${{ secrets.CRM_ADMIN_TOKEN }}
+          CURSOR: ${{ inputs.cursor }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+        run: |
+          set -u
+          if [ -z "$TOKEN" ]; then
+            echo "CRM_ADMIN_TOKEN secret is not set" >&2
+            exit 1
+          fi
+
+          TOTAL_PROCESSED=0
+          TOTAL_FOUND=0
+          BATCH=0
+          FAILS=0
+
+          while :; do
+            BATCH=$((BATCH + 1))
+            if [ -n "$CURSOR" ]; then
+              BODY="{\"batchSize\":$BATCH_SIZE,\"cursor\":\"$CURSOR\"}"
+            else
+              BODY="{\"batchSize\":$BATCH_SIZE}"
+            fi
+
+            RESP=$(curl -s -m 120 -X POST "$BASE/api/discovery/find-missing-emails" \
+              -H "content-type: application/json" -H "x-admin-token: $TOKEN" -d "$BODY" || true)
+
+            PARSED=$(node -e "
+              try {
+                const r = JSON.parse(process.argv[1]);
+                const d = r.data || {};
+                console.log([d.processed ?? -1, d.found ?? 0, d.nextCursor ?? '', d.totalMissing ?? -1].join('|'));
+              } catch { console.log('PARSE_ERROR'); }
+            " "$RESP" 2>/dev/null)
+
+            if [ "$PARSED" = "PARSE_ERROR" ] || [ -z "$PARSED" ]; then
+              FAILS=$((FAILS + 1))
+              echo "Batch $BATCH: bad response (fail $FAILS/8): $(echo "$RESP" | head -c 200)"
+              if [ "$FAILS" -ge 8 ]; then
+                echo "## Re-enrichment aborted" >> "$GITHUB_STEP_SUMMARY"
+                echo "8 consecutive failures. Resume cursor: \`$CURSOR\`" >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+              fi
+              sleep 30
+              continue
+            fi
+            FAILS=0
+
+            PROCESSED=$(echo "$PARSED" | cut -d'|' -f1)
+            FOUND=$(echo "$PARSED" | cut -d'|' -f2)
+            NEXT=$(echo "$PARSED" | cut -d'|' -f3)
+            MISSING=$(echo "$PARSED" | cut -d'|' -f4)
+
+            TOTAL_PROCESSED=$((TOTAL_PROCESSED + PROCESSED))
+            TOTAL_FOUND=$((TOTAL_FOUND + FOUND))
+            echo "Batch $BATCH: processed=$PROCESSED found=$FOUND | totals: processed=$TOTAL_PROCESSED emails_found=$TOTAL_FOUND still_missing=$MISSING | cursor=$NEXT"
+
+            if [ -z "$NEXT" ]; then
+              echo "## Re-enrichment complete ✅" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Contacts processed: **$TOTAL_PROCESSED** across $BATCH batches" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Emails found: **$TOTAL_FOUND**" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Contacts still missing an email: **$MISSING**" >> "$GITHUB_STEP_SUMMARY"
+              break
+            fi
+            CURSOR="$NEXT"
+            sleep 2
+          done
