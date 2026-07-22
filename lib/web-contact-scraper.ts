@@ -10,7 +10,7 @@
 import { parseDomain } from "@/lib/text";
 
 const PAGE_TIMEOUT_MS = 6_000;
-const MAX_PAGES = 6;
+const MAX_PAGES = 8;
 const MAX_PAGE_BYTES = 600_000;
 // Browser-like UA — plenty of facility sites 403 anything that looks like a
 // bot. Large health systems with real bot protection will still block, which
@@ -21,12 +21,58 @@ const USER_AGENT =
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE_REGEX = /(?:\(\d{3}\)\s?|\d{3}[-.\s])\d{3}[-.\s]\d{4}/g;
 
+// "jane [at] facility [dot] com", "jane (at) facility.com", "jane AT facility DOT com"
+const OBFUSCATED_EMAIL_REGEX =
+  /([A-Z0-9._%+-]+)\s*[([{]?\s*(?:at|@)\s*[)\]}]?\s*([A-Z0-9-]+(?:\s*[([{]?\s*(?:dot|\.)\s*[)\]}]?\s*[A-Z0-9-]+)+)/gi;
+
+/** Decodes Cloudflare email protection: <a data-cfemail="hex"> is XOR-encoded
+ *  with the first byte as key — fully reversible client side. */
+function decodeCfEmail(hex: string): string | null {
+  if (!/^[0-9a-f]{4,}$/i.test(hex) || hex.length % 2 !== 0) return null;
+  const bytes: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  const key = bytes[0];
+  const decoded = bytes.slice(1).map((b) => String.fromCharCode(b ^ key)).join("");
+  return decoded.includes("@") ? decoded.toLowerCase() : null;
+}
+
+/** Resolves "jane [at] facility [dot] com"-style obfuscation into real addresses. */
+function extractObfuscatedEmails(text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(OBFUSCATED_EMAIL_REGEX)) {
+    const local = match[1];
+    const domainPart = match[2]
+      .replace(/\s*[([{]?\s*(?:dot|\.)\s*[)\]}]?\s*/gi, ".")
+      .replace(/\s+/g, "");
+    const candidate = `${local}@${domainPart}`.toLowerCase();
+    if (EMAIL_REGEX.test(candidate)) found.push(candidate);
+    EMAIL_REGEX.lastIndex = 0;
+  }
+  return found;
+}
+
 /** Pulls plausible email addresses out of arbitrary text (search snippets,
  *  page content), filtering asset filenames and placeholder domains. */
 export function extractEmailsFromText(text: string): string[] {
+  // Decode numeric/named HTML entities that hide the @ and dots from naive bots.
+  const decoded = text
+    .replace(/&#0*64;|&commat;/gi, "@")
+    .replace(/&#0*46;|&period;/gi, ".")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const n = Number(code);
+      return n >= 32 && n < 127 ? String.fromCharCode(n) : " ";
+    });
+
   const found = new Set<string>();
-  for (const match of text.matchAll(EMAIL_REGEX)) {
-    const email = match[0].toLowerCase().replace(/^mailto:/, "");
+  const candidates = [
+    ...[...decoded.matchAll(EMAIL_REGEX)].map((m) => m[0]),
+    ...extractObfuscatedEmails(decoded),
+    ...[...decoded.matchAll(/data-cfemail=["']([0-9a-f]+)["']/gi)]
+      .map((m) => decodeCfEmail(m[1]))
+      .filter((e): e is string => e !== null),
+  ];
+  for (const raw of candidates) {
+    const email = raw.toLowerCase().replace(/^mailto:/, "");
     if (/\.(png|jpg|jpeg|gif|svg|webp|css|js)$/.test(email)) continue;
     if (/@(example|sentry|wixpress|placeholder|domain|email|yourdomain)\./.test(email)) continue;
     found.add(email);
@@ -34,14 +80,77 @@ export function extractEmailsFromText(text: string): string[] {
   return [...found];
 }
 
+// ---------------------------------------------------------------------------
+// JSON-LD structured data — many healthcare sites embed schema.org
+// Person/Organization objects with email and telephone that never appear in
+// the rendered text.
+// ---------------------------------------------------------------------------
+
+type JsonLdContact = { name: string | null; email: string | null; phone: string | null; title: string | null };
+
+function walkJsonLd(node: unknown, out: JsonLdContact[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) walkJsonLd(item, out);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+
+  const type = obj["@type"];
+  const types = Array.isArray(type) ? type : [type];
+  if (types.some((t) => typeof t === "string" && /person|physician|contactpoint|organization|localbusiness|medical/i.test(t))) {
+    const email = typeof obj.email === "string" ? obj.email.replace(/^mailto:/i, "").toLowerCase() : null;
+    const phone = typeof obj.telephone === "string" ? obj.telephone : null;
+    if (email || phone) {
+      out.push({
+        name: typeof obj.name === "string" ? obj.name : null,
+        email,
+        phone,
+        title: typeof obj.jobTitle === "string" ? obj.jobTitle : null,
+      });
+    }
+  }
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") walkJsonLd(value, out);
+  }
+}
+
+/** Extracts schema.org contact entries from <script type="application/ld+json"> blocks. */
+export function extractJsonLdContacts(html: string): JsonLdContact[] {
+  const out: JsonLdContact[] = [];
+  for (const match of html.matchAll(
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
+  )) {
+    try {
+      walkJsonLd(JSON.parse(match[1]), out);
+    } catch {
+      // malformed JSON-LD is common; skip the block
+    }
+  }
+  return out;
+}
+
 // Local parts that are mailboxes, not people.
 const GENERIC_LOCAL_PARTS =
   /^(info|contact|admin|office|hello|admissions|marketing|hr|jobs|careers|billing|frontdesk|reception|support|sales|inquiries|webmaster|noreply|no-reply|privacy|media|press|referrals?)$/i;
 
 // Paths worth trying when the homepage doesn't link to them explicitly.
-const FALLBACK_PATHS = ["/contact", "/contact-us", "/about", "/about-us", "/team", "/staff", "/leadership"];
+const FALLBACK_PATHS = [
+  "/contact",
+  "/contact-us",
+  "/about",
+  "/about-us",
+  "/team",
+  "/our-team",
+  "/staff",
+  "/leadership",
+  "/administration",
+  "/directory",
+  "/providers",
+  "/meet-the-team",
+];
 
-const CONTACT_LINK_PATTERN = /(contact|team|staff|leader|about|management|administration|our-people|meet)/i;
+const CONTACT_LINK_PATTERN = /(contact|team|staff|leader|about|management|administration|our-people|meet|directory|providers)/i;
 
 export type ScrapedSite = {
   baseUrl: string;
@@ -53,6 +162,8 @@ export type ScrapedSite = {
   personalEmails: string[];
   /** Plain-text content of each fetched page, for proximity matching. */
   textBlocks: string[];
+  /** Contacts declared in schema.org JSON-LD blocks (often invisible in page text). */
+  structuredContacts: JsonLdContact[];
 };
 
 function htmlToText(html: string): string {
@@ -140,8 +251,13 @@ export async function scrapeSiteForContacts(website: string): Promise<ScrapedSit
 
   const emails = new Set<string>();
   const textBlocks: string[] = [];
+  const structuredContacts: JsonLdContact[] = [];
   for (const html of pages) {
     for (const email of extractEmails(html)) emails.add(email);
+    for (const contact of extractJsonLdContacts(html)) {
+      structuredContacts.push(contact);
+      if (contact.email) emails.add(contact.email);
+    }
     textBlocks.push(htmlToText(html));
   }
 
@@ -153,6 +269,7 @@ export async function scrapeSiteForContacts(website: string): Promise<ScrapedSit
     emails: allEmails,
     personalEmails: allEmails.filter(isPersonalEmail),
     textBlocks,
+    structuredContacts,
   };
 }
 
@@ -209,7 +326,7 @@ export function emailPatternCandidates(
 export type PersonContactHit = {
   email: string | null;
   phone: string | null;
-  matchType: "email_local_part" | "name_proximity" | null;
+  matchType: "structured_data" | "email_local_part" | "name_proximity" | null;
 };
 
 /**
@@ -224,6 +341,17 @@ export function findPersonContact(
 ): PersonContactHit {
   const first = normalizeNamePart(firstName);
   const last = normalizeNamePart(lastName);
+
+  // JSON-LD is the most reliable hit: the site itself declares the person.
+  if (first && last) {
+    for (const contact of site.structuredContacts) {
+      const name = normalizeNamePart(contact.name);
+      if (!name || !name.includes(last) || !name.includes(first)) continue;
+      if (contact.email || contact.phone) {
+        return { email: contact.email, phone: contact.phone, matchType: "structured_data" };
+      }
+    }
+  }
 
   let localPartEmail: string | null = null;
   if (first && last) {

@@ -280,7 +280,11 @@ model Contact {
   title          String?
   department     String?
   email          String?
+  /** Deliverability of `email`: "verified" | "risky" | "guessed" | null (never checked). */
+  emailStatus    String?
   phone          String?
+  /** "direct" (person's own line) | "main_line" (facility front desk) | null (unknown). */
+  phoneType      String?
   linkedinUrl    String?
   confidenceScore Float?
   source         String?

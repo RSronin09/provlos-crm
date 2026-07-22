@@ -5,6 +5,7 @@ import { DataTable } from "@/components/crm/ui/data-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { FilterBar } from "@/components/crm/ui/filter-bar";
 import { PageHeader } from "@/components/crm/ui/page-header";
+import { EmailStatusBadge, PhoneTypeBadge, ReachabilitySummary } from "@/components/crm/ui/reachability";
 import { SearchInput } from "@/components/crm/ui/search-input";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
@@ -78,13 +79,13 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
       <DataTable
         headers={[
           "Full Name",
+          "Reach",
           "Title",
           "Department",
           "Account",
           "Email",
           "Phone",
           "LinkedIn",
-          "Source",
           "Last Verified",
         ]}
       >
@@ -97,6 +98,15 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
                   "Unnamed contact"}
               </Link>
             </td>
+            <td className="px-4 py-3">
+              <ReachabilitySummary
+                email={contact.email}
+                emailStatus={contact.emailStatus}
+                phone={contact.phone}
+                phoneType={contact.phoneType}
+                linkedinUrl={contact.linkedinUrl}
+              />
+            </td>
             <td className="px-4 py-3">{contact.title ?? "-"}</td>
             <td className="px-4 py-3">{contact.department ?? "-"}</td>
             <td className="px-4 py-3">
@@ -104,8 +114,14 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
                 {contact.account.companyName}
               </Link>
             </td>
-            <td className="px-4 py-3">{contact.email ?? "-"}</td>
-            <td className="px-4 py-3">{contact.phone ?? "-"}</td>
+            <td className="px-4 py-3">
+              {contact.email ?? "-"}
+              <EmailStatusBadge status={contact.emailStatus} />
+            </td>
+            <td className="px-4 py-3">
+              {contact.phone ?? "-"}
+              <PhoneTypeBadge phoneType={contact.phoneType} />
+            </td>
             <td className="px-4 py-3">
               {contact.linkedinUrl ? (
                 <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">
@@ -115,7 +131,6 @@ export default async function ContactsPage({ searchParams }: ContactsPageProps) 
                 "-"
               )}
             </td>
-            <td className="px-4 py-3">{contact.source ?? "-"}</td>
             <td className="px-4 py-3">
               {contact.lastVerifiedAt ? contact.lastVerifiedAt.toISOString().slice(0, 10) : "-"}
             </td>

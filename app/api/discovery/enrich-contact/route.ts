@@ -2,6 +2,7 @@ import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
+import { lookupPlace } from "@/lib/places";
 import { parseDomain } from "@/lib/text";
 import { NextRequest } from "next/server";
 
@@ -20,7 +21,9 @@ export async function POST(request: NextRequest) {
   const contact = await db.contact.findUnique({
     where: { id: contactId },
     include: {
-      account: { select: { id: true, companyName: true, website: true } },
+      account: {
+        select: { id: true, companyName: true, website: true, phone: true, city: true, state: true },
+      },
     },
   });
 
@@ -53,6 +56,42 @@ export async function POST(request: NextRequest) {
     linkedinUrl: contact.linkedinUrl,
   });
 
+  // Guaranteed fallback channel: when the cascade found no phone, fall back to
+  // the facility's main line (account record, else Google Business via Serper
+  // Places) so the contact is still reachable as "call, ask for <name>".
+  let mainLinePhone: string | null = null;
+  if (!contact.phone && !match?.phone) {
+    mainLinePhone = contact.account.phone;
+    if (!mainLinePhone) {
+      const place = await lookupPlace(contact.account.companyName, {
+        city: contact.account.city,
+        state: contact.account.state,
+        domain,
+      });
+      if (place?.phone) {
+        mainLinePhone = place.phone;
+        await db.account.update({
+          where: { id: contact.account.id },
+          data: {
+            phone: place.phone,
+            website: website ?? place.website ?? undefined,
+          },
+        });
+      }
+    }
+  }
+
+  if (!match && mainLinePhone) {
+    const updated = await db.contact.update({
+      where: { id: contact.id },
+      data: { phone: mainLinePhone, phoneType: "main_line" },
+    });
+    return Response.json({
+      data: { updated: true, contactId: updated.id, phone: updated.phone, phoneType: "main_line" },
+      message: "No direct contact info found, but the facility's main line was attached — call and ask for this contact by name.",
+    });
+  }
+
   if (!match) {
     // Spell out what actually ran vs. what was skipped, so "No match" is
     // debuggable from the UI without reading server logs.
@@ -76,9 +115,10 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const fallbackPhone = match.phone ?? mainLinePhone;
   const hasNewData =
     (!contact.email && match.email) ||
-    (!contact.phone && match.phone) ||
+    (!contact.phone && fallbackPhone) ||
     (!contact.linkedinUrl && match.linkedinUrl);
 
   if (!hasNewData) {
@@ -92,7 +132,11 @@ export async function POST(request: NextRequest) {
     where: { id: contact.id },
     data: {
       email: contact.email ?? match.email ?? undefined,
-      phone: contact.phone ?? match.phone ?? undefined,
+      emailStatus: contact.email ? undefined : (match.email ? match.emailStatus : undefined),
+      phone: contact.phone ?? fallbackPhone ?? undefined,
+      phoneType: contact.phone
+        ? undefined
+        : (match.phone ? match.phoneType : (mainLinePhone ? "main_line" : undefined)),
       linkedinUrl: contact.linkedinUrl ?? match.linkedinUrl ?? undefined,
       title: contact.title ?? match.title ?? undefined,
       firstName: contact.firstName ?? match.firstName ?? undefined,

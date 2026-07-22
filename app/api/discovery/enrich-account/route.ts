@@ -2,6 +2,7 @@ import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { lookupDecisionMakers, enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
+import { lookupPlace } from "@/lib/places";
 import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { parseDomain } from "@/lib/text";
 import { scrapeSiteForContacts } from "@/lib/web-contact-scraper";
@@ -34,6 +35,9 @@ export async function POST(request: NextRequest) {
       id: true,
       companyName: true,
       website: true,
+      phone: true,
+      city: true,
+      state: true,
       contacts: {
         select: {
           id: true,
@@ -90,6 +94,26 @@ export async function POST(request: NextRequest) {
     website && contactsNeedingEnrichment.length ? await scrapeSiteForContacts(website) : null;
   if (scrapedSite) providersUsed.add("website");
 
+  // Facility main line — the guaranteed fallback channel. Looked up once per
+  // account (Google Business via Serper Places) and reused for every contact
+  // the cascade couldn't find a direct phone for.
+  let mainLinePhone = account.phone;
+  if (!mainLinePhone && contactsNeedingEnrichment.length) {
+    const place = await lookupPlace(account.companyName, {
+      city: account.city,
+      state: account.state,
+      domain,
+    });
+    if (place?.phone) {
+      mainLinePhone = place.phone;
+      providersUsed.add("google_places");
+      await db.account.update({
+        where: { id: account.id },
+        data: { phone: place.phone, website: website ?? place.website ?? undefined },
+      });
+    }
+  }
+
   for (const contact of contactsNeedingEnrichment) {
     const match = await enrichContactByName(
       {
@@ -104,30 +128,35 @@ export async function POST(request: NextRequest) {
       { scrapedSite },
     );
 
-    if (!match) continue;
+    const directPhone = match?.phone ?? null;
+    const bestPhone = directPhone ?? mainLinePhone;
 
     const hasNewData =
-      (!contact.email && match.email) ||
-      (!contact.phone && match.phone) ||
-      (!contact.linkedinUrl && match.linkedinUrl);
+      (!contact.email && match?.email) ||
+      (!contact.phone && bestPhone) ||
+      (!contact.linkedinUrl && match?.linkedinUrl);
 
     if (hasNewData) {
       await db.contact.update({
         where: { id: contact.id },
         data: {
-          email: contact.email ?? match.email ?? undefined,
-          phone: contact.phone ?? match.phone ?? undefined,
-          linkedinUrl: contact.linkedinUrl ?? match.linkedinUrl ?? undefined,
-          title: contact.title ?? match.title ?? undefined,
-          firstName: contact.firstName ?? match.firstName ?? undefined,
-          lastName: contact.lastName ?? match.lastName ?? undefined,
-          confidenceScore: Math.max(contact.confidenceScore ?? 0, match.confidenceScore),
-          source: match.source,
-          lastVerifiedAt: new Date(),
+          email: contact.email ?? match?.email ?? undefined,
+          emailStatus: contact.email ? undefined : (match?.email ? match.emailStatus : undefined),
+          phone: contact.phone ?? bestPhone ?? undefined,
+          phoneType: contact.phone
+            ? undefined
+            : (directPhone ? (match?.phoneType ?? "direct") : (bestPhone ? "main_line" : undefined)),
+          linkedinUrl: contact.linkedinUrl ?? match?.linkedinUrl ?? undefined,
+          title: contact.title ?? match?.title ?? undefined,
+          firstName: contact.firstName ?? match?.firstName ?? undefined,
+          lastName: contact.lastName ?? match?.lastName ?? undefined,
+          confidenceScore: Math.max(contact.confidenceScore ?? 0, match?.confidenceScore ?? 0),
+          source: match?.source ?? undefined,
+          lastVerifiedAt: match ? new Date() : undefined,
         },
       });
       updated++;
-      match.sourcesUsed.forEach((s) => providersUsed.add(s));
+      match?.sourcesUsed.forEach((s) => providersUsed.add(s));
     }
   }
 

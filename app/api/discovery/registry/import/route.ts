@@ -147,6 +147,7 @@ export async function POST(request: NextRequest) {
               where: { id: contact.id },
               data: {
                 email: match.email,
+                emailStatus: match.emailStatus,
                 linkedinUrl: match.linkedinUrl ?? undefined,
                 confidenceScore: match.confidenceScore,
                 lastVerifiedAt: new Date(),

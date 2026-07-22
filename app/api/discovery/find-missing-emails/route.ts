@@ -123,7 +123,9 @@ export async function POST(request: NextRequest) {
           where: { id: contact.id },
           data: {
             email: match.email ?? undefined,
+            emailStatus: match.email ? match.emailStatus : undefined,
             phone: contact.phone ?? match.phone ?? undefined,
+            phoneType: contact.phone ? undefined : (match.phone ? match.phoneType : undefined),
             linkedinUrl: contact.linkedinUrl ?? match.linkedinUrl ?? undefined,
             title: contact.title ?? match.title ?? undefined,
             confidenceScore: Math.max(contact.confidenceScore ?? 0, match.confidenceScore),

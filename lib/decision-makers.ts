@@ -558,7 +558,11 @@ export function cleanPersonName(raw: string | null | undefined): {
 
 export type ApolloContactMatch = {
   email: string | null;
+  /** Deliverability of `email`: "verified" | "risky" | "guessed" | null (not checked). */
+  emailStatus: string | null;
   phone: string | null;
+  /** "direct" (person's own number) | "main_line" (facility front desk) | null. */
+  phoneType: string | null;
   linkedinUrl: string | null;
   title: string | null;
   firstName: string | null;
@@ -630,6 +634,9 @@ async function serperEmailHunt(
   const queries = [
     `"${fullName}" "${organizationName}" email`,
     ...(domain ? [`"${fullName}" "@${domain}"`] : []),
+    // Staff directories, county provider lists, and association rosters are
+    // usually published as PDFs — a rich source B2B databases never index.
+    `"${fullName}" "${organizationName}" (email OR contact) filetype:pdf`,
   ];
 
   for (const query of queries) {
@@ -734,7 +741,9 @@ async function enrichContactFromApollo(input: {
 
     return {
       email: person.email ?? null,
+      emailStatus: null,
       phone: primaryPhone,
+      phoneType: primaryPhone ? "direct" : null,
       linkedinUrl: person.linkedin_url ?? null,
       title: person.title ?? null,
       firstName: person.first_name ?? input.firstName,
@@ -791,7 +800,9 @@ export async function enrichContactByName(
   const sourcesUsed: string[] = [];
   let email: string | null = null;
   let emailSource = "";
+  let emailStatus: string | null = null;
   let phone: string | null = null;
+  let phoneType: string | null = null;
   let title: string | null = null;
   let linkedinUrl = input.linkedinUrl ?? null;
   let confidence = 0;
@@ -815,6 +826,7 @@ export async function enrichContactByName(
     }
     if (hit.phone) {
       phone = hit.phone;
+      phoneType = "direct";
       if (!sourcesUsed.includes("website")) sourcesUsed.push("website");
     }
   }
@@ -846,7 +858,10 @@ export async function enrichContactByName(
       emailSource = "hunter";
       confidence = Math.min(hunterHit.score / 100, 0.95);
       title = title ?? hunterHit.position;
-      phone = phone ?? hunterHit.phone;
+      if (!phone && hunterHit.phone) {
+        phone = hunterHit.phone;
+        phoneType = "direct";
+      }
       sourcesUsed.push("hunter");
     }
   }
@@ -880,7 +895,10 @@ export async function enrichContactByName(
     if (backup) {
       email = backup.email;
       emailSource = backup.email ? backup.source : emailSource;
-      phone = phone ?? backup.phone;
+      if (!phone && backup.phone) {
+        phone = backup.phone;
+        phoneType = backup.phoneType ?? "direct";
+      }
       title = title ?? backup.title;
       linkedinUrl = linkedinUrl ?? backup.linkedinUrl;
       confidence = Math.max(confidence, backup.confidenceScore);
@@ -894,6 +912,7 @@ export async function enrichContactByName(
     if (verified) {
       email = verified;
       emailSource = "verified_pattern";
+      emailStatus = "verified";
       confidence = Math.max(confidence, 0.9);
       sourcesUsed.push("verified_pattern");
     }
@@ -905,8 +924,27 @@ export async function enrichContactByName(
     if (guessed) {
       email = guessed;
       emailSource = "email_pattern_guess";
+      emailStatus = "guessed";
       confidence = Math.max(confidence, 0.45);
       sourcesUsed.push("email_pattern_guess");
+    }
+  }
+
+  // ---- Verification gate: any email that wasn't already verified gets one
+  // deliverability check before it's allowed into the CRM. An invalid address
+  // is worse than none — it bounces, burns sender reputation, and reads as a
+  // dead contact — so invalids are dropped outright.
+  if (email && emailStatus === null && isInstantlyConfigured()) {
+    const check = await verifyEmail(email);
+    if (check.status === "verified" && !check.catchAll) {
+      emailStatus = "verified";
+      confidence = Math.max(confidence, 0.9);
+      sourcesUsed.push("instantly_verify");
+    } else if (check.status === "invalid") {
+      email = null;
+      emailSource = "";
+    } else {
+      emailStatus = "risky"; // catch-all domain or verification pending/errored
     }
   }
 
@@ -916,7 +954,9 @@ export async function enrichContactByName(
 
   return {
     email,
+    emailStatus: email ? emailStatus : null,
     phone,
+    phoneType: phone ? phoneType : null,
     linkedinUrl,
     title,
     firstName,
@@ -997,7 +1037,9 @@ async function enrichContactFromPDL(input: {
 
     return {
       email: primaryEmail,
+      emailStatus: null,
       phone: primaryPhone,
+      phoneType: primaryPhone ? "direct" : null,
       linkedinUrl: data.linkedin_url ? `https://${data.linkedin_url}` : null,
       title: data.job_title ?? null,
       firstName: data.first_name ?? null,
