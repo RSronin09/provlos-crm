@@ -60,13 +60,16 @@ jobs:
 
             if [ "$PARSED" = "PARSE_ERROR" ] || [ -z "$PARSED" ]; then
               FAILS=$((FAILS + 1))
-              echo "Batch $BATCH: bad response (fail $FAILS/8): $(echo "$RESP" | head -c 200)"
-              if [ "$FAILS" -ge 8 ]; then
+              # Deploy swaps and platform blips have produced error windows of
+              # 10+ minutes — wait them out (~30 min of tolerance) instead of
+              # aborting a multi-hour pass.
+              echo "Batch $BATCH: bad response (fail $FAILS/30): $(echo "$RESP" | head -c 200)"
+              if [ "$FAILS" -ge 30 ]; then
                 echo "## Re-enrichment aborted" >> "$GITHUB_STEP_SUMMARY"
-                echo "8 consecutive failures. Resume cursor: \`$CURSOR\`" >> "$GITHUB_STEP_SUMMARY"
+                echo "30 consecutive failures. Resume cursor: \`$CURSOR\`" >> "$GITHUB_STEP_SUMMARY"
                 exit 1
               fi
-              sleep 30
+              sleep 60
               continue
             fi
             FAILS=0
