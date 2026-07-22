@@ -12,9 +12,9 @@ on:
         required: false
         default: ""
       batch_size:
-        description: "Contacts per API call (1-20)"
+        description: "Contacts per API call (1-10, server-enforced). 5 is the measured safe default."
         required: false
-        default: "20"
+        default: "5"
 
 jobs:
   reenrich:
@@ -46,7 +46,7 @@ jobs:
             # sites at once) — shrink it until it fits instead of retrying the
             # same oversized request forever.
             SIZE=$BATCH_SIZE
-            if [ "$FAILS" -ge 5 ]; then SIZE=1; elif [ "$FAILS" -ge 2 ]; then SIZE=5; fi
+            if [ "$FAILS" -ge 3 ]; then SIZE=1; elif [ "$FAILS" -ge 1 ]; then SIZE=3; fi
             if [ -n "$CURSOR" ]; then
               BODY="{\"batchSize\":$SIZE,\"cursor\":\"$CURSOR\"}"
             else

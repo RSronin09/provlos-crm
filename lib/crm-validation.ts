@@ -175,27 +175,6 @@ export const resequenceDriverSchema = z.object({
   driverId: z.string().uuid(),
 });
 
-export const addDiscoveredLeadSchema = z.object({
-  companyName: z.string().min(2),
-  website: z.string().url().optional().nullable(),
-  state: z.string().optional().nullable(),
-  region: z.string().optional().nullable(),
-  contacts: z.array(
-    z.object({
-      fullName: z.string().min(1),
-      firstName: z.string().optional().nullable(),
-      lastName: z.string().optional().nullable(),
-      title: z.string().optional().nullable(),
-      department: z.string().optional().nullable(),
-      email: z.string().email().optional().nullable(),
-      phone: z.string().optional().nullable(),
-      linkedinUrl: z.string().url().optional().nullable(),
-      confidenceScore: z.number().optional().nullable(),
-      source: z.string().optional().nullable(),
-    }),
-  ),
-});
-
 export const instantlyLocationSchema = z.union([
   z.object({ place_id: z.string(), label: z.string().optional() }),
   z.object({
@@ -304,7 +283,6 @@ const spreadsheetRowSchema = z.object({
 
 export const spreadsheetImportSchema = z.object({
   rows: z.array(spreadsheetRowSchema).min(1).max(500),
-  autoEnrich: z.boolean().optional(),
 });
 
 export type SpreadsheetRow = z.infer<typeof spreadsheetRowSchema>;

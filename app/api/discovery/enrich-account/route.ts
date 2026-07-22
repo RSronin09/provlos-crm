@@ -1,9 +1,8 @@
 import { unauthorizedResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { lookupDecisionMakers, enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
+import { enrichContactByName, resolveWebsite } from "@/lib/decision-makers";
 import { lookupPlace } from "@/lib/places";
-import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { parseDomain } from "@/lib/text";
 import { scrapeSiteForContacts } from "@/lib/web-contact-scraper";
 import { NextRequest } from "next/server";
@@ -77,13 +76,12 @@ export async function POST(request: NextRequest) {
   }
   const domain = parseDomain(website);
 
-  let added = 0;
   let updated = 0;
   const providersUsed = new Set<string>();
 
   // -----------------------------------------------------------------------
-  // Phase 1: Per-contact enrichment for existing contacts missing email or
-  // phone. Free-first: the facility's own website is scraped ONCE here and
+  // Per-contact enrichment for existing contacts missing email or phone.
+  // Free-first: the facility's own website is scraped ONCE here and
   // reused for every contact; Hunter runs next; Apollo/PDL are backups.
   // -----------------------------------------------------------------------
   const contactsNeedingEnrichment = account.contacts
@@ -160,37 +158,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // -----------------------------------------------------------------------
-  // Phase 2: Company-level discovery — find NEW people at this company
-  // that are not yet in our contacts list.
-  // -----------------------------------------------------------------------
-  let discoveryError: string | null = null;
-  try {
-    const { contacts: discovered, resolvedWebsite, providersUsed: usedProviders } =
-      await lookupDecisionMakers({
-        companyName: account.companyName,
-        website,
-      });
-
-    usedProviders.forEach((p) => providersUsed.add(p));
-
-    const saved = await saveDiscoveredContacts(account.id, discovered, { updateExisting: true });
-    added += saved.created;
-    updated += saved.updated;
-
-    // Update account website if resolved
-    if (resolvedWebsite && !website) {
-      await db.account.update({
-        where: { id: account.id },
-        data: { website: resolvedWebsite },
-      });
-    }
-  } catch (error) {
-    // Phase 2 is non-fatal — Phase 1 results are already saved — but the
-    // failure should be visible to the caller, not silently swallowed.
-    discoveryError = error instanceof Error ? error.message : "Company-level discovery failed";
-    console.error(`Company-level discovery failed for ${account.companyName}:`, discoveryError);
-  }
+  // NOTE: this route deliberately does NOT invent new contacts. It only
+  // fills in channels (email/phone/LinkedIn) for contacts that already
+  // exist on the account — new people come from the registry or Instantly
+  // imports, where identity is grounded in real data.
 
   // Be honest when the button had nothing to work with.
   let note: string | null = null;
@@ -211,14 +182,12 @@ export async function POST(request: NextRequest) {
     data: {
       accountId: account.id,
       companyName: account.companyName,
-      contactsAdded: added,
       contactsUpdated: updated,
       totalProcessed: contactsNeedingEnrichment.length,
       totalContacts: account.contacts.length,
       providersUsed: [...providersUsed],
-      discoveryError,
       note,
     },
-    message: `Enrichment complete: ${updated} contacts updated with email/phone, ${added} new contacts found for ${account.companyName}.${discoveryError ? ` Note: company-level discovery failed (${discoveryError}).` : ""}`,
+    message: `Enrichment complete: ${updated} of ${contactsNeedingEnrichment.length} contacts updated with email/phone for ${account.companyName}.`,
   });
 }

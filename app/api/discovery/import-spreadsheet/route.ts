@@ -2,31 +2,11 @@ import { unauthorizedResponse, zodErrorResponse } from "@/lib/api";
 import { isAdminRequest } from "@/lib/admin";
 import { spreadsheetImportSchema } from "@/lib/crm-validation";
 import { db } from "@/lib/db";
-import { lookupDecisionMakers } from "@/lib/decision-makers";
 import { saveDiscoveredContacts } from "@/lib/save-contacts";
 import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 60;
-
-// Cap live enrichment to avoid Vercel function timeouts (each lookup ~5-10 s)
-const MAX_ENRICH = 20;
-
-async function saveEnrichedContacts(
-  accountId: string,
-  companyName: string,
-  website: string | null,
-): Promise<{ added: number; error: string | null }> {
-  try {
-    const { contacts } = await lookupDecisionMakers({ companyName, website });
-    const result = await saveDiscoveredContacts(accountId, contacts, { updateExisting: true });
-    return { added: result.created + result.updated, error: null };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown enrichment error";
-    console.error(`Enrichment failed for ${companyName}:`, message);
-    return { added: 0, error: message };
-  }
-}
 
 export async function POST(request: NextRequest) {
   if (!isAdminRequest(request)) {
@@ -40,15 +20,15 @@ export async function POST(request: NextRequest) {
     return zodErrorResponse(parsed.error);
   }
 
-  const { rows, autoEnrich } = parsed.data;
+  // NOTE: this route imports exactly what the spreadsheet contains — accounts
+  // and any contacts listed in the rows. It never invents people via web
+  // search; channel enrichment for known contacts is a separate, explicit step.
+  const { rows } = parsed.data;
 
   let created = 0;
   let skipped = 0;
   let contactsCreated = 0;
-  let enrichedAccounts = 0;
-  let enrichedContacts = 0;
   const errors: { row: number; error: string }[] = [];
-  const enrichmentErrors: { companyName: string; error: string }[] = [];
 
   type ImportedAccount = { id: string; companyName: string; website: string | null };
   const newAccounts: ImportedAccount[] = [];
@@ -156,40 +136,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Live enrichment: call lookupDecisionMakers for each newly created account.
-  // Run sequentially to respect API rate limits; cap at MAX_ENRICH to avoid timeouts.
-  if (autoEnrich && newAccounts.length > 0) {
-    const toEnrich = newAccounts.slice(0, MAX_ENRICH);
-
-    for (const account of toEnrich) {
-      const { added, error } = await saveEnrichedContacts(
-        account.id,
-        account.companyName,
-        account.website,
-      );
-      if (error) {
-        enrichmentErrors.push({ companyName: account.companyName, error });
-      }
-      if (added > 0) {
-        enrichedAccounts++;
-        enrichedContacts += added;
-      }
-    }
-  }
-
   return Response.json(
     {
       data: {
         created,
         skipped,
         contactsCreated,
-        enrichedAccounts,
-        enrichedContacts,
-        cappedAt: autoEnrich && newAccounts.length > MAX_ENRICH ? MAX_ENRICH : null,
         errors,
-        enrichmentErrors,
       },
-      message: `Import complete: ${created} accounts created, ${skipped} skipped, ${contactsCreated + enrichedContacts} contacts added.`,
+      message: `Import complete: ${created} accounts created, ${skipped} skipped, ${contactsCreated} contacts added.`,
     },
     { status: 201 },
   );

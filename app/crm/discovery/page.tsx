@@ -1,13 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { DecisionMakerSearch } from "@/components/crm/decision-maker-search";
-import { BulkDiscovery } from "@/components/crm/bulk-discovery";
-import { SpreadsheetImport } from "@/components/crm/spreadsheet-import";
 import { InstantlySearchPanel } from "@/components/crm/instantly-search-panel";
 import { RegistrySearchPanel } from "@/components/crm/registry-search-panel";
 
-type Tab = "registry" | "search" | "bulk" | "spreadsheet" | "instantly";
+type Tab = "registry" | "instantly";
 
 const TABS: { id: Tab; label: string; description: string }[] = [
   {
@@ -15,21 +12,6 @@ const TABS: { id: Tab; label: string; description: string }[] = [
     label: "Healthcare Registry",
     description:
       "Pull every licensed healthcare facility in your target counties from the free government NPI registry — with decision-maker names, titles, and phones included.",
-  },
-  {
-    id: "search",
-    label: "Decision Maker Search",
-    description: "Look up decision makers at any company using Apollo, Hunter.io, and Serper.",
-  },
-  {
-    id: "bulk",
-    label: "Bulk Company Discovery",
-    description: "Run batch discovery to find net-new companies from web signals.",
-  },
-  {
-    id: "spreadsheet",
-    label: "Spreadsheet Import",
-    description: "Upload an Excel or CSV file to bulk-import and enrich leads.",
   },
   {
     id: "instantly",
@@ -48,7 +30,8 @@ export default function DiscoveryPage() {
       <div>
         <h2 className="text-2xl font-semibold">Lead Discovery</h2>
         <p className="text-sm text-slate-600 mt-1">
-          Find decision makers, run bulk discovery, or import leads from a spreadsheet.
+          Pull facilities from the government registry or search Instantly&apos;s verified database.
+          Spreadsheet uploads live under Import.
         </p>
       </div>
 
@@ -74,9 +57,6 @@ export default function DiscoveryPage() {
       <p className="text-xs text-slate-500 -mt-2">{active.description}</p>
 
       {activeTab === "registry" && <RegistrySearchPanel />}
-      {activeTab === "search" && <DecisionMakerSearch />}
-      {activeTab === "bulk" && <BulkDiscovery />}
-      {activeTab === "spreadsheet" && <SpreadsheetImport />}
       {activeTab === "instantly" && <InstantlySearchPanel />}
     </div>
   );

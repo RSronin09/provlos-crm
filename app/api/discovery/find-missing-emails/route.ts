@@ -15,17 +15,24 @@ export const maxDuration = 60;
 
 // Stop picking up new contacts after this much wall time and hand the caller
 // a cursor instead, so the UI can loop batch after batch without timeouts.
-// Kept well under maxDuration: a chunk started just inside the budget still
-// needs room to finish before the platform kills the invocation.
-const TIME_BUDGET_MS = 25_000;
+// Set conservatively: the budget is checked BEFORE a chunk starts, so the
+// real ceiling is TIME_BUDGET_MS + one chunk's worst-case duration
+// (~PER_CONTACT_TIMEOUT_MS, since a chunk's contacts run concurrently) —
+// that sum must stay under maxDuration with real margin.
+const TIME_BUDGET_MS = 15_000;
 
 // Hard per-contact ceiling — one slow facility site or a hung provider call
 // must not burn the whole invocation. A contact that exceeds this simply
 // stays unenriched (the per-contact Enrich button can retry it later).
-const PER_CONTACT_TIMEOUT_MS = 20_000;
+// Measured against production: batchSize=20 (4 chunks) reliably hit
+// FUNCTION_INVOCATION_TIMEOUT at 60s; batchSize=5 (1 chunk) reliably
+// finished in ~10s. Kept low so TIME_BUDGET_MS + this stays well under 60s.
+const PER_CONTACT_TIMEOUT_MS = 12_000;
 
 const bodySchema = z.object({
-  batchSize: z.number().int().min(1).max(20).default(10),
+  // Hard-capped at 10 — batchSize=20 measured to reliably exceed Vercel's
+  // 60s function limit (FUNCTION_INVOCATION_TIMEOUT) in production.
+  batchSize: z.number().int().min(1).max(10).default(5),
   // Loose UUID shape — zod's .uuid() enforces RFC version/variant bits,
   // which rejects some otherwise-valid stored ids.
   cursor: z
@@ -159,7 +166,7 @@ export async function POST(request: NextRequest) {
   // so provider APIs (Serper/Hunter/Instantly) aren't hammered, and the time
   // budget is checked between chunks so we return a cursor instead of letting
   // the serverless runtime kill the invocation mid-write.
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 3;
 
   const enrichOne = async (contact: (typeof contacts)[number]) => {
     const cached =

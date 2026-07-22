@@ -85,9 +85,6 @@ type ImportResult = {
   created: number;
   skipped: number;
   contactsCreated: number;
-  enrichedAccounts: number;
-  enrichedContacts: number;
-  cappedAt: number | null;
   errors: { row: number; error: string }[];
 };
 
@@ -102,7 +99,6 @@ export function SpreadsheetImport() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [mapping, setMapping] = useState<Partial<Record<MappedField, string>>>({});
-  const [autoEnrich, setAutoEnrich] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -204,7 +200,7 @@ export function SpreadsheetImport() {
           "Content-Type": "application/json",
           "x-admin-token": adminToken,
         },
-        body: JSON.stringify({ rows: mappedRows, autoEnrich }),
+        body: JSON.stringify({ rows: mappedRows }),
       });
 
       const json = await res.json();
@@ -358,23 +354,6 @@ export function SpreadsheetImport() {
       {/* Options + Import */}
       {rows.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={autoEnrich}
-              onChange={(e) => setAutoEnrich(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span>
-              <span className="text-sm font-medium text-slate-800 group-hover:text-blue-700">
-                Auto-enrich leads after import
-              </span>
-              <span className="block text-xs text-slate-500 mt-0.5">
-                Looks up decision-maker contacts for each imported company live via Serper and Hunter.io (up to 20 companies). Takes ~30–60 s for large batches.
-              </span>
-            </span>
-          </label>
-
           <div className="flex flex-col sm:flex-row gap-3 pt-1">
             <button
               onClick={handleImport}
@@ -382,9 +361,7 @@ export function SpreadsheetImport() {
               className="flex-1 sm:flex-none rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {importing
-                ? autoEnrich
-                  ? "Importing & enriching…"
-                  : "Importing…"
+                ? "Importing…"
                 : `Import ${rows.length} Row${rows.length !== 1 ? "s" : ""}`}
             </button>
             <button
@@ -452,12 +429,6 @@ export function SpreadsheetImport() {
               { label: "Accounts created", value: result.created },
               { label: "Already existed", value: result.skipped },
               { label: "Contacts from sheet", value: result.contactsCreated },
-              ...(result.enrichedAccounts > 0
-                ? [
-                    { label: "Companies enriched", value: result.enrichedAccounts },
-                    { label: "Decision makers found", value: result.enrichedContacts },
-                  ]
-                : []),
             ].map(({ label, value }) => (
               <div key={label} className="rounded-lg bg-white border border-green-100 p-3 text-center">
                 <p className="text-2xl font-bold text-green-700">{value}</p>
@@ -465,18 +436,6 @@ export function SpreadsheetImport() {
               </div>
             ))}
           </div>
-
-          {result.cappedAt && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              Enrichment was limited to the first {result.cappedAt} companies. Open each account and use the &ldquo;Enrich&rdquo; button to look up decision makers for the rest.
-            </p>
-          )}
-
-          {result.enrichedAccounts === 0 && autoEnrich && (
-            <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg px-3 py-2">
-              No decision makers were found during enrichment. This usually means the SERPER_API_KEY or HUNTER_API_KEY environment variables are not set on the server. You can still add contacts manually from each account page.
-            </p>
-          )}
 
           {result.errors.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
