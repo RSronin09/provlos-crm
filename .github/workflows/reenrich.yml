@@ -36,8 +36,13 @@ jobs:
 
           TOTAL_PROCESSED=0
           TOTAL_FOUND=0
+          TOTAL_SKIPPED=0
           BATCH=0
           FAILS=0
+          # Tracks consecutive failures at the exact same cursor so we can
+          # skip past a contact that consistently hangs the serverless function.
+          CURSOR_FAIL_STREAK=0
+          LAST_FAIL_CURSOR=""
 
           while :; do
             BATCH=$((BATCH + 1))
@@ -47,10 +52,21 @@ jobs:
             # same oversized request forever.
             SIZE=$BATCH_SIZE
             if [ "$FAILS" -ge 3 ]; then SIZE=1; elif [ "$FAILS" -ge 1 ]; then SIZE=3; fi
+
+            # If we have been stuck at the exact same cursor for 5+ consecutive
+            # fails, the problem contact is almost certainly timing out the
+            # function on its own. Skip past it (skipCount increments with each
+            # stuck streak so we can skip multiple bad contacts in a row).
+            SKIP=0
+            if [ "$CURSOR_FAIL_STREAK" -ge 5 ]; then
+              SKIP=$(( (CURSOR_FAIL_STREAK - 5) / 5 + 1 ))
+              echo "Batch $BATCH: cursor stuck at $CURSOR for $CURSOR_FAIL_STREAK fails — skipping $SKIP contact(s)"
+            fi
+
             if [ -n "$CURSOR" ]; then
-              BODY="{\"batchSize\":$SIZE,\"cursor\":\"$CURSOR\"}"
+              BODY="{\"batchSize\":$SIZE,\"cursor\":\"$CURSOR\",\"skipCount\":$SKIP}"
             else
-              BODY="{\"batchSize\":$SIZE}"
+              BODY="{\"batchSize\":$SIZE,\"skipCount\":$SKIP}"
             fi
 
             RESP=$(curl -s -m 120 -X POST "$BASE/api/discovery/find-missing-emails" \
@@ -60,16 +76,24 @@ jobs:
               try {
                 const r = JSON.parse(process.argv[1]);
                 const d = r.data || {};
-                console.log([d.processed ?? -1, d.found ?? 0, d.nextCursor ?? '', d.totalMissing ?? -1].join('|'));
+                console.log([d.processed ?? -1, d.found ?? 0, d.nextCursor ?? '', d.totalMissing ?? -1, d.skipped ?? 0].join('|'));
               } catch { console.log('PARSE_ERROR'); }
             " "$RESP" 2>/dev/null)
 
             if [ "$PARSED" = "PARSE_ERROR" ] || [ -z "$PARSED" ]; then
               FAILS=$((FAILS + 1))
+              # Track cursor stability: if we keep failing at the same cursor,
+              # we need to skip past the offending contact.
+              if [ "$CURSOR" = "$LAST_FAIL_CURSOR" ]; then
+                CURSOR_FAIL_STREAK=$((CURSOR_FAIL_STREAK + 1))
+              else
+                CURSOR_FAIL_STREAK=1
+                LAST_FAIL_CURSOR="$CURSOR"
+              fi
               # Deploy swaps and platform blips have produced error windows of
               # 10+ minutes — wait them out (~30 min of tolerance) instead of
               # aborting a multi-hour pass.
-              echo "Batch $BATCH: bad response (fail $FAILS/30): $(echo "$RESP" | head -c 200)"
+              echo "Batch $BATCH: bad response (fail $FAILS/30, streak $CURSOR_FAIL_STREAK at cursor $CURSOR): $(echo "$RESP" | head -c 200)"
               if [ "$FAILS" -ge 30 ]; then
                 echo "## Re-enrichment aborted" >> "$GITHUB_STEP_SUMMARY"
                 echo "30 consecutive failures. Resume cursor: \`$CURSOR\`" >> "$GITHUB_STEP_SUMMARY"
@@ -79,20 +103,25 @@ jobs:
               continue
             fi
             FAILS=0
+            CURSOR_FAIL_STREAK=0
+            LAST_FAIL_CURSOR=""
 
             PROCESSED=$(echo "$PARSED" | cut -d'|' -f1)
             FOUND=$(echo "$PARSED" | cut -d'|' -f2)
             NEXT=$(echo "$PARSED" | cut -d'|' -f3)
             MISSING=$(echo "$PARSED" | cut -d'|' -f4)
+            SKIPPED=$(echo "$PARSED" | cut -d'|' -f5)
 
             TOTAL_PROCESSED=$((TOTAL_PROCESSED + PROCESSED))
             TOTAL_FOUND=$((TOTAL_FOUND + FOUND))
-            echo "Batch $BATCH: processed=$PROCESSED found=$FOUND | totals: processed=$TOTAL_PROCESSED emails_found=$TOTAL_FOUND still_missing=$MISSING | cursor=$NEXT"
+            TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED))
+            echo "Batch $BATCH: processed=$PROCESSED found=$FOUND skipped=$SKIPPED | totals: processed=$TOTAL_PROCESSED emails_found=$TOTAL_FOUND skipped=$TOTAL_SKIPPED still_missing=$MISSING | cursor=$NEXT"
 
             if [ -z "$NEXT" ]; then
               echo "## Re-enrichment complete ✅" >> "$GITHUB_STEP_SUMMARY"
               echo "- Contacts processed: **$TOTAL_PROCESSED** across $BATCH batches" >> "$GITHUB_STEP_SUMMARY"
               echo "- Emails found: **$TOTAL_FOUND**" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Contacts skipped (timed out): **$TOTAL_SKIPPED**" >> "$GITHUB_STEP_SUMMARY"
               echo "- Contacts still missing an email: **$MISSING**" >> "$GITHUB_STEP_SUMMARY"
               break
             fi

@@ -19,15 +19,17 @@ export const maxDuration = 60;
 // real ceiling is TIME_BUDGET_MS + one chunk's worst-case duration
 // (~PER_CONTACT_TIMEOUT_MS, since a chunk's contacts run concurrently) —
 // that sum must stay under maxDuration with real margin.
-const TIME_BUDGET_MS = 15_000;
+//
+// Budget tightened from 15 s → 8 s: worst-case accounting shows
+// STAGE1_BUDGET(10) + stage1 background tail(8) + TIME_BUDGET(8) +
+// PER_CONTACT(8) + enrichment background tail(8) = 42 s, well inside 60 s.
+const TIME_BUDGET_MS = 8_000;
 
 // Hard per-contact ceiling — one slow facility site or a hung provider call
 // must not burn the whole invocation. A contact that exceeds this simply
 // stays unenriched (the per-contact Enrich button can retry it later).
-// Measured against production: batchSize=20 (4 chunks) reliably hit
-// FUNCTION_INVOCATION_TIMEOUT at 60s; batchSize=5 (1 chunk) reliably
-// finished in ~10s. Kept low so TIME_BUDGET_MS + this stays well under 60s.
-const PER_CONTACT_TIMEOUT_MS = 12_000;
+// Reduced from 12 s → 8 s to tighten the overall worst-case wall time.
+const PER_CONTACT_TIMEOUT_MS = 8_000;
 
 const bodySchema = z.object({
   // Hard-capped at 10 — batchSize=20 measured to reliably exceed Vercel's
@@ -39,6 +41,11 @@ const bodySchema = z.object({
     .string()
     .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
     .optional(),
+  // How many contacts to skip from the cursor position before processing.
+  // The runner passes a non-zero value when it detects it is stuck at the
+  // same cursor (i.e. a specific contact is consistently timing out), so it
+  // can jump over the offender and continue the pass.
+  skipCount: z.number().int().min(0).max(50).default(0),
 });
 
 // Batch email-finder: walks every contact that has a name but no email and
@@ -67,12 +74,15 @@ export async function POST(request: NextRequest) {
   // `id > cursor` pagination rather than Prisma's cursor API: processed
   // contacts gain emails and drop out of the filter, and a cursor anchored
   // on a row that no longer matches the filter returns nothing.
+  // `skipCount` lets the runner jump past contacts that consistently time
+  // out the function — they stay in the DB and can be retried manually.
   const contacts = await db.contact.findMany({
     where: parsed.data.cursor
       ? { AND: [whereMissingEmail, { id: { gt: parsed.data.cursor } }] }
       : whereMissingEmail,
     orderBy: { id: "asc" },
     take: parsed.data.batchSize,
+    skip: parsed.data.skipCount,
     include: {
       account: {
         select: { id: true, companyName: true, website: true, phone: true, city: true, state: true },
@@ -105,7 +115,8 @@ export async function POST(request: NextRequest) {
   // facility sites, uncapped prep alone can blow past the platform's 60s
   // function limit. Accounts not prepped in time fall back to their stored
   // website/phone and skip the scrape.
-  const STAGE1_BUDGET_MS = 15_000;
+  // Tightened from 15 s → 10 s to match the revised overall budget model.
+  const STAGE1_BUDGET_MS = 10_000;
 
   const siteCache = new Map<
     string,
@@ -252,6 +263,7 @@ export async function POST(request: NextRequest) {
       results,
       nextCursor,
       totalMissing,
+      skipped: parsed.data.skipCount,
     },
     message: `Processed ${processed} contact(s), found ${found} email(s).`,
   });
