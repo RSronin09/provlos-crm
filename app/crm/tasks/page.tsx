@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
+import { AutoRefresh } from "@/components/crm/auto-refresh";
 import { CreateTaskModal } from "@/components/crm/create-task-modal";
 import { TaskStatusToggle } from "@/components/crm/task-status-toggle";
 import { DataTable } from "@/components/crm/ui/data-table";
@@ -61,6 +62,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <PageHeader
         title="Tasks"
         subtitle="Track follow-up work across accounts and contacts."

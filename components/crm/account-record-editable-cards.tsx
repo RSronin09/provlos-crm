@@ -3,7 +3,7 @@
 import { EnrichContactButton } from "@/components/crm/enrich-contact-button";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type EditableActivity = {
   id: string;
@@ -522,6 +522,29 @@ export function AccountRecordEditableCards({
       ].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
     [activities, tasks],
   );
+
+  // When the server re-renders with fresh data (auto-refresh or another
+  // device's mutation), sync the local task/activity lists so stale state
+  // from the previous render doesn't persist.  We skip syncing a task that
+  // is currently open in an edit form to avoid clobbering in-progress edits.
+  useEffect(() => {
+    setTasks((prev) =>
+      initialTasks.map((task) => {
+        const parsed = parseTaskPayload(task.type, task.notes);
+        const normalized = { ...task, title: parsed.title, notes: parsed.body };
+        // Preserve any locally-mutated fields for the task being edited right now.
+        const existing = prev.find((t) => t.id === task.id);
+        if (existing && editingTaskId === task.id) return existing;
+        return normalized;
+      }),
+    );
+  }, [initialTasks, editingTaskId]);
+
+  useEffect(() => {
+    // Only refresh the activity list when no activity is being edited.
+    if (editingActivityId !== null) return;
+    setActivities(initialActivities);
+  }, [initialActivities, editingActivityId]);
 
   return (
     <div className="space-y-6">
